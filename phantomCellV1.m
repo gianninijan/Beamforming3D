@@ -64,13 +64,14 @@ hold off
 
 
 %% CALCULAR O PATH-LOSS DOS UE'S
+
 vtDistUEtoBS = abs(vtUePos);                                     % Calculando as distancias entre UE's e BS:
 
 % PL = 36.7*log10(sort(vtDistUEtoBS)) + 22.7 + 26*log10(fc);     % Path Loss em [db]          
 % PL = 36.7*log10((vtDistUEtoBS)) + 22.7 + 26*log10(fc);
+% plot(sort(vtDistUEtoBS), PL)
 PL = PathLoss(vtDistUEtoBS, fc);                                 % Path Loss em [db]
 figure;                                                          % gera uma nova figura para plotar os graficos
-%plot(sort(vtDistUEtoBS), PL)
 plot(sort(vtDistUEtoBS), sort(PL))
 xlabel('d (M)')
 ylabel('PL (DB)')
@@ -82,19 +83,14 @@ title('Path Loss ')
 %vtShadowing = sigma*randn(1, numUE);                          % Vetor de sombreamento para cada UE's [dB]
 vtLogNormal = lognrnd(0,db2lin(4),1, numUE);                   % Vetor de shadowing Log Normal (?)
 vtFastFad = (1/sqrt(2))*[randn(1,numUE) + 1j*randn(1,numUE)];  % vetor de Desvanecimento Rapido para cada UE's  
-fi3dB_2D = 70;                                                 % largura de feixe de 3 dB na horizontal [º (GRAUS)]
-theta3dB_2D = 10;                                              % largura de feixe de 3 dB na vertical   [º (GRAUS)]
-angDownTild_2d = 8;                                            % angulo de down-tild (FIXO) [º (GRAUS)]
+fi3dB_2D = 70;                                                 % largura de feixe de 3 dB na horizontal [GRAUS]
+theta3dB_2D = 10;                                              % largura de feixe de 3 dB na vertical   [GRAUS]
+angDownTild_2d = 8;                                            % angulo de down-tild (FIXO) [GRAUS]
 ang_st = [60, 180, 300];                                       % vetor de angulos de sterring para cada setor
-angUEd = (180/pi).*angUE;                                      % angulo azimutal dos UE's em [º (GRAUS)]
+angUEd = (180/pi).*angUE;                                      % angulo azimutal dos UE's em [GRAUS]
 
-AH_2d = zeros(1, numUE);                                       % vetor de padrão de radiação horizontal
-    
 % Padrão de radiação na HORIZONTAL 
-% AH_2d(sector1) = -min((12.*(((angUEd(sector1) - ang_st(1))/fi3dB_2D).^2)), Am);
-% AH_2d(sector2) = -min((12.*(((angUEd(sector2) - ang_st(2))/fi3dB_2D).^2)), Am);
-% AH_2d(sector3) = -min((12.*(((angUEd(sector3) - ang_st(3))/fi3dB_2D).^2)), Am);
-
+AH_2d = zeros(1, numUE);                                       % vetor de padrão de radiação horizontal
 AH_2d(sector1) = padrao_Horizontal(angUE(sector1), ang_st(1), fi3dB_2D, Am);
 AH_2d(sector2) = padrao_Horizontal(angUE(sector2), ang_st(2), fi3dB_2D, Am);
 AH_2d(sector3) = padrao_Horizontal(angUE(sector3), ang_st(3), fi3dB_2D, Am);
@@ -102,8 +98,7 @@ AH_2d(sector3) = padrao_Horizontal(angUE(sector3), ang_st(3), fi3dB_2D, Am);
 % Padrão de radiação na VERTICAL
 thetaUEs = atand((H_BS - H_UE)./(vtDistUEtoBS));                           % [GRAUS]
 AV_2d = padrao_Vertical(thetaUEs, angDownTild_2d, theta3dB_2D, SLA);       % [dB]
-%AV_2d = -min(12.*(((thetaUEs-angDownTild_2d)./theta3dB_2D).^2), SLA);            
-
+           
 % Padrão de radiação TOTAL
 A = -min(-(AH_2d + AV_2d), Am);
 
@@ -112,16 +107,18 @@ G_L = db2lin(G_BS);                                       % Ganho LINEAR da ante
 A_L = db2lin(A);                                          % Padrão da Antena Total em escala Linear 
 PL_L = db2lin(PL);
 
-h_2D = canal(G_L, A_L, PL_L, vtLogNormal, vtFastFad);
-%h_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad;      % coeficientes do canal para o 2D
-
+h_2D = canal(G_L, A_L, PL_L, vtLogNormal, vtFastFad);     % coeficientes do canal para o 2D
+     
 Pot = dbm2lin(P_BS);                                      % Potência da antena transmissora
 PN = dbm2lin(No+ 10*log10(bandWidth)+FN);                 % Potência do Ruído
 
 % coeficientes do canal interferentes
-hI1_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad;
-hI2_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad; 
+hi21_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad;   % sinal interferente do setor 2 p/ os usuarios do setor 1
+hi31_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad;   % sinal interferente do setor 3 p/ os usuarios do setor 1
 
 SINR_2D = zeros(1, numUE);
 % SINR_2D(sector1) = Pot*abs(h_2D(sector1))./(Pot.*() + PN);
+
+
+
 
