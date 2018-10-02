@@ -8,13 +8,16 @@ close all;
 
 %% SETUP SIMULATION  
 
-bandWidth = 10e+6;                                   % largura de banda 
-fc = 3.5;                                            % frequencia de portadora [Ghz] na small-cell
-R = 40;                                              % raio da pequena celula
+M = 1;                                               % numero de celulas
+FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
+S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
 numUE = 20;                                          % numero de UE's por macro-setores
+R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
 vtSector = [ R*exp( 1j*[0 2*pi/3 4*pi/3] ) ];        % vetor marcação dos pontos de sectorização
+bandWidth = 10e+6;                                   % largura de banda 
+fc = 3.5;                                            % frequencia de portadora [Ghz] na small-cell
 Am = 25;                                             % Atenuação Maxima [dB]
 SLA = 20;                                            % Limite de nível de lobulo-lateral [dB]
 G_BS = 5;                                            % Ganha da antena BS de pequena celula [dBi]
@@ -64,16 +67,18 @@ hold off
 vtDistUEtoBS = abs(vtUePos);                                     % Calculando as distancias entre UE's e BS:
 
 % PL = 36.7*log10(sort(vtDistUEtoBS)) + 22.7 + 26*log10(fc);     % Path Loss em [db]          
-PL = 36.7*log10((vtDistUEtoBS)) + 22.7 + 26*log10(fc);
+% PL = 36.7*log10((vtDistUEtoBS)) + 22.7 + 26*log10(fc);
+PL = PathLoss(vtDistUEtoBS, fc);                                 % Path Loss em [db]
 figure;                                                          % gera uma nova figura para plotar os graficos
 %plot(sort(vtDistUEtoBS), PL)
 plot(sort(vtDistUEtoBS), sort(PL))
-xlabel('d (KM)')
+xlabel('d (M)')
 ylabel('PL (DB)')
 title('Path Loss ')
 
 
 %%  BEAMFORMING 2D %%
+
 %vtShadowing = sigma*randn(1, numUE);                          % Vetor de sombreamento para cada UE's [dB]
 vtLogNormal = lognrnd(0,db2lin(4),1, numUE);                   % Vetor de shadowing Log Normal (?)
 vtFastFad = (1/sqrt(2))*[randn(1,numUE) + 1j*randn(1,numUE)];  % vetor de Desvanecimento Rapido para cada UE's  
@@ -86,13 +91,18 @@ angUEd = (180/pi).*angUE;                                      % angulo azimutal
 AH_2d = zeros(1, numUE);                                       % vetor de padrão de radiação horizontal
     
 % Padrão de radiação na HORIZONTAL 
-AH_2d(sector1) = -min((12.*(((angUEd(sector1) - ang_st(1))/fi3dB_2D).^2)), Am);
-AH_2d(sector2) = -min((12.*(((angUEd(sector2) - ang_st(2))/fi3dB_2D).^2)), Am);
-AH_2d(sector3) = -min((12.*(((angUEd(sector3) - ang_st(3))/fi3dB_2D).^2)), Am);
+% AH_2d(sector1) = -min((12.*(((angUEd(sector1) - ang_st(1))/fi3dB_2D).^2)), Am);
+% AH_2d(sector2) = -min((12.*(((angUEd(sector2) - ang_st(2))/fi3dB_2D).^2)), Am);
+% AH_2d(sector3) = -min((12.*(((angUEd(sector3) - ang_st(3))/fi3dB_2D).^2)), Am);
+
+AH_2d(sector1) = padrao_Horizontal(angUE(sector1), ang_st(1), fi3dB_2D, Am);
+AH_2d(sector2) = padrao_Horizontal(angUE(sector2), ang_st(2), fi3dB_2D, Am);
+AH_2d(sector3) = padrao_Horizontal(angUE(sector3), ang_st(3), fi3dB_2D, Am);
 
 % Padrão de radiação na VERTICAL
-thetaUEs = atand((H_BS - H_UE)./(vtDistUEtoBS));                                   % [º em GRAUS]
-AV_2d = -min(12.*(((thetaUEs-angDownTild_2d)./theta3dB_2D).^2), SLA);            
+thetaUEs = atand((H_BS - H_UE)./(vtDistUEtoBS));                           % [GRAUS]
+AV_2d = padrao_Vertical(thetaUEs, angDownTild_2d, theta3dB_2D, SLA);       % [dB]
+%AV_2d = -min(12.*(((thetaUEs-angDownTild_2d)./theta3dB_2D).^2), SLA);            
 
 % Padrão de radiação TOTAL
 A = -min(-(AH_2d + AV_2d), Am);
@@ -102,13 +112,15 @@ G_L = db2lin(G_BS);                                       % Ganho LINEAR da ante
 A_L = db2lin(A);                                          % Padrão da Antena Total em escala Linear 
 PL_L = db2lin(PL);
 
-h_2D = sqrt(numUE.*A_L.*PL_L.*vtLogNormal).*vtFastFad;    % coeficientes do canal para o 2D
+h_2D = canal(G_L, A_L, PL_L, vtLogNormal, vtFastFad);
+%h_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad;      % coeficientes do canal para o 2D
+
 Pot = dbm2lin(P_BS);                                      % Potência da antena transmissora
 PN = dbm2lin(No+ 10*log10(bandWidth)+FN);                 % Potência do Ruído
 
 % coeficientes do canal interferentes
-hI1_2D = sqrt(numUE.*A_L.*PL_L.*vtLogNormal).*vtFastFad;
-hI2_2D = sqrt(numUE.*A_L.*PL_L.*vtLogNormal).*vtFastFad; 
+hI1_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad;
+hI2_2D = sqrt(G_L.*A_L.*PL_L.*vtLogNormal).*vtFastFad; 
 
 SINR_2D = zeros(1, numUE);
 % SINR_2D(sector1) = Pot*abs(h_2D(sector1))./(Pot.*() + PN);
