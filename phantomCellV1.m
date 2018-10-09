@@ -13,6 +13,7 @@ FatorSetor = 3;                                      % Fator de setorização, i.e
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
 numUE = 20;                                          % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
+R_BS = 1e-6;                                         % raio da posição BS
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
 vtSector = [ R*exp( 1j*[0 2*pi/3 4*pi/3] ) ];        % vetor marcação dos pontos de sectorização
@@ -31,10 +32,17 @@ H_UE = 1.5;                                          % altura da antena da estaç
 
 %% POSIÇÕES DA BS E UE'S %%
 
-% gerando os vetores para UE's (equipamento do usuário) aleatorios e iid.                       
-angUE = 2*pi*rand(1,numUE);                            % angulo azimutal aleatorio dos UE's iid entre [0,2*PI] (RADIANOS)
-raioUE = (R-10).*rand(1,numUE)+10;                     % raio aleatorio dos UE's iid entre (10,R)
-vtUePos = raioUE.*exp(1j*angUE);                       % vetor de posições de UE's
+% vetor das posições dos UE's (equipamento do usuário) aleatorios e iid.                       
+angUE = 2*pi*rand(1,numUE);                         % angulo azimutal aleatorio dos UE's iid entre [0,2*PI] (RADIANOS)
+raioUE = (R-10).*rand(1,numUE)+10;                  % raio aleatorio dos UE's iid entre (10,R)
+vtUePos = raioUE.*exp(1j*angUE);                    % vetor de posições de UE's
+
+% vetor das posições da BS de cada setor
+ang_st = [pi/3, pi, 5*pi/3];                              % angulos de sterring p/ cada celula
+raio_bs = 0;                                              % raio das BS's
+ang_bs = 0;                                               % angulos de posições das BS's
+posBS = raio_bs*exp(1j*ang_bs);                           % forma exponencial das BS's
+mtBSPos = [ repelem(posBS, S)' repmat(ang_st(:), M, 1)];  % cada linha [posBS_setor ang_stl]
 
 % plotando as POSIÇÕES da BS e UE's    
 hold on;
@@ -65,17 +73,27 @@ hold off
 
 %% CALCULAR O PATH-LOSS DOS UE'S
 
-vtDistUEtoBS = abs(vtUePos);                                     % Calculando as distancias entre UE's e BS:
+mtDist = zeros(S,numUE);                         % matriz de distancia de cada UE para BS de cada setor               
 
-% PL = 36.7*log10(sort(vtDistUEtoBS)) + 22.7 + 26*log10(fc);     % Path Loss em [db]          
-% PL = 36.7*log10((vtDistUEtoBS)) + 22.7 + 26*log10(fc);
-% plot(sort(vtDistUEtoBS), PL)
-PL = PathLoss(vtDistUEtoBS, fc);                                 % Path Loss em [db]
-figure;                                                          % gera uma nova figura para plotar os graficos
+% laço percorrendo cada setor
+for ii = 1:S
+    
+    % laço percorrendo todos os usuários
+    for jj = 1:numUE
+        mtDist(ii,jj) = norm(vtUePos(jj) - mtBSPos(ii,1));  % elementos da matriz de distância
+    end
+end
+
+vtDistUEtoBS = abs(vtUePos);                     % Calculando as distancias entre UE's e BS:
+PL = PathLoss(vtDistUEtoBS, fc);                 % Path Loss em [db]
+figure;                                          % gera uma nova figura para plotar os graficos
 plot(sort(vtDistUEtoBS), sort(PL))
 xlabel('d (M)')
 ylabel('PL (DB)')
 title('Path Loss ')
+
+mtPL = PathLoss(mtDist, fc);                    % matriz de PATH LOSS de cada setor para cada usuário
+% PL = min(mtPL);                               % valor minimo
 
 
 %%  BEAMFORMING 2D %%
@@ -83,10 +101,13 @@ title('Path Loss ')
 %vtShadowing = sigma*randn(1, numUE);                          % Vetor de sombreamento para cada UE's [dB]
 vtLogNormal = lognrnd(0,db2lin(4),1, numUE);                   % Vetor de shadowing Log Normal (?)
 vtFastFad = (1/sqrt(2))*[randn(1,numUE) + 1j*randn(1,numUE)];  % vetor de Desvanecimento Rapido para cada UE's  
+
+mtLogNormal = lognrnd(0,db2lin(4),S, numUE);
+mtFastFad = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)];
+
 fi3dB_2D = 70;                                                 % largura de feixe de 3 dB na horizontal [GRAUS]
 theta3dB_2D = 10;                                              % largura de feixe de 3 dB na vertical   [GRAUS]
 angDownTild_2d = 8;                                            % angulo de down-tild (FIXO) [GRAUS]
-ang_st = [60, 180, 300];                                       % vetor de angulos de sterring para cada setor
 angUEd = (180/pi).*angUE;                                      % angulo azimutal dos UE's em [GRAUS]
 
 % Padrão de radiação na HORIZONTAL 
@@ -120,5 +141,5 @@ SINR_2D = zeros(1, numUE);
 % SINR_2D(sector1) = Pot*abs(h_2D(sector1))./(Pot.*() + PN);
 
 
-
-
+% angulos_teste = [pi/3 3*pi/4 5*pi/4 7*pi/4 ];      % = [60º 135º 225º 315º]
+% lambdaWrapped = (180/pi).*wrapToPi(angulos_teste); % = [60º 135º -135º -45º] % Se angulo<0: angulo + 360 
