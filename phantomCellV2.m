@@ -11,7 +11,7 @@ close all;
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-numUE = 20;                                          % numero de UE's por macro-setores
+numUE = 1000;                                           % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
@@ -30,10 +30,6 @@ H_UE = 1.5;                                          % altura da antena da estaç
 
 %% POSIÇÕES DA BS E UE'S %%
 
-% vetor das posições dos UE's (equipamento do usuário) aleatorios e iid.                       
-% angUE = 2*pi*rand(1,numUE);             % angulo azimutal aleatorio dos UE's iid entre [0,2*PI] (RADIANOS)             
-% raioUE = (R-10).*rand(1,numUE)+10;      % raio aleatorio dos UE's iid entre (10,R)
-% vtUePos = raioUE.*exp(1j*angUE);        % vetor de posições de UE's
 % angUE = [pi/3, pi, 5*pi/3];             % angulos de teste
 % raioUE = (R/2).*ones(1,numUE);          % raios de teste
 % vtUePos = raioUE.*exp(1j*angUE);        % vetor de posição das UE's de teste
@@ -75,20 +71,22 @@ plot(x,y,'y');
 legend('Celula', 'BS', 'UEs','Setores')
 
 % Encontrando os indices dos UE's de cada sector.
-% sector1 = find( (angUE >= 0) & (angUE < (2*pi/3)) );          % indices dos UE's que estão no setor 1
-% sector2 = find( (angUE >= (2*pi/3)) & (angUE < (4*pi/3)) );   % indices dos UE's que estão no setor 2
-% sector3 = find( (angUE >= (4*pi/3)) & (angUE < (2*pi)) );     % indices dos UE's que estão no setor 3
+angUE = wrapTo2Pi(angle(vtUePos));
+sector1 = find( (angUE >= 0) & (angUE < (2*pi/3)) );          % indices dos UE's que estão no setor 1
+sector2 = find( (angUE >= (2*pi/3)) & (angUE < (4*pi/3)) );   % indices dos UE's que estão no setor 2
+sector3 = find( (angUE >= (4*pi/3)) & (angUE < (2*pi)) );     % indices dos UE's que estão no setor 3
 
 % Testando o codigo acima dos setores: 
-% resultado = vtUePos(sector1);          % captura as distancia dos UE's que estão dentro do setor 1
-% plot(resultado,'bo');                  % plota o valores do 'resultados' com um circulo azul  
+resultado = vtUePos(sector2);          % captura as distancia dos UE's que estão dentro do setor 1
+plot(resultado,'ro');                  % plota o valores do 'resultados' com um circulo azul  
 
 hold off
 
 
 %% CALCULAR O PATH-LOSS DOS UE'S
 
-mtDist = zeros(S,numUE);              % matriz de distancia de cada UE (coluna) para BS (linha) de cada setor               
+% matriz de distancia de cada UE (coluna) para BS (linha) de cada setor
+mtDist = zeros(S,numUE);                             
 
 % laço percorrendo cada setor
 for ii = 1:S
@@ -100,8 +98,8 @@ for ii = 1:S
     
 end
 
-% para calcular o setor de cada UE devemos levar em conta a distancia para 
-% cada BS do setor e angulo
+% P/ calcular o setor de cada UE devemos levar em conta a distancia p/ cada BS do setor e angulo
+
 mtPL = PathLoss(mtDist, fc);                  % matriz de PATH LOSS de cada setor para cada usuário
 PL = min(mtPL);                               % valor minimo
 vtDistUEtoBS = min(mtDist);
@@ -113,15 +111,16 @@ title('Path Loss ')
 
 
 %%  BEAMFORMING 2D %%
-% mtLogNormal_2D = lognrnd(0,db2lin(4),S, numUE);                    % matriz de shadowing Log Normal (?)
 % mtFastFad_2D = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)]; % vetor de Desvanecimento Rapido para cada UE's
 % load('desvanecimento.mat');
-mtNormal_2D = sigma.*randn(S,numUE);    % Linhas: Setores; Colunas: Usuários
 
 % valores tirados do artigo
 fi3dB_2D = 70;                     % largura de feixe de 3 dB na horizontal [GRAUS]
 theta3dB_2D = 10;                  % largura de feixe de 3 dB na vertical   [GRAUS]
 angDownTild_2d = 8;                % angulo de down-tild (FIXO) [GRAUS]
+
+% matriz de shadowing normal
+mtNormal_2D = sigma.*randn(S,numUE);    % Linhas: Setores; Colunas: Usuários
 
 % Angulo \theta de cada UE p/ cada BS do setor 
 mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [GRAUS]
@@ -132,63 +131,90 @@ Av_2D = -min(12.*(((mtThetaUE - angDownTild_2d)./theta3dB_2D).^2), SLA);    % li
 % calculando o padrão horizontal da antena
 Ah_2D = [];
 
-% laço percorrendo cada setor (linhas de Ah_2D) 
-for ii = 1:S,
+% posições dos UE's 
+posicoes_d = (180/pi).*angle(vtUePos); % [-180, 180]
+
+% diferença do angulo azimutal de cada UE p/ cada angulo de steering de cada setor
+mtdifAngulos_d = [];
+
+% laço percorrendo cada UE
+for jj = 1:numUE,
     
-    % laço percorrendo cada UE (colunas de Ah_2D)
-    for jj = 1:numUE,
+    % angulo de cada usuario em [-180, 180]
+    anguloUE180 = (180/pi).*angle(vtUePos(jj));  
+   
+    % angulo de cada usuario em [0, 360]
+    anguloUE360 = wrapTo360(anguloUE180);
+    
+    % calculo o angulo de steering para cada setor entre [0, 360]
+    angStrTo360 = (180/pi).*vtAngST;
+    
+    % calculo o angulo de steering para cada setor entre [-180, 180]
+    angStrTo180 = wrapTo180(angStrTo360);
+
+    % laço percorrendo cada setor
+    for ii = 1:S,
         
+        % calcula a diferença entre angulos
+        dif1 = abs(anguloUE360 - angStrTo360(ii));
+        dif2 = abs(anguloUE180 - angStrTo180(ii));
+        difAngulo = min(dif1, dif2);
+        
+        mtdifAngulos_d(ii, jj) = difAngulo;
     end
-    
 end
 
-% calculando a diferença entre angulos para as formulas da A_V e A_H.
-% mtDifFhis_2D = diffAngles(vtAngST, angUE);    % linha: cada UE, coluna: phiST_setor [GRAUS]
-
-% calculando os padrões verticais e horizontais
-% Ah_2D = -min(12.*((mtDifFhis_2D./fi3dB_2D).^2), Am);
-
+% padrão de radiação HORIZONTAL
+Ah_2D = -min(12.*((mtdifAngulos_d./fi3dB_2D).^2), Am);
 
 % Padrão de radiação TOTAL
 A = -min(-(Ah_2D + Av_2D), Am);
 
-% Passando os parametros para escala linear
-% G_L = db2lin(G_BS);                        % Ganho LINEAR da antena BS 
-% mtA_L = db2lin(A);                         % matriz Padrão da Antena Total em escala Linear 
-% mtPL_L = db2lin(mtPL);                     % matriz de path loss de cada UE para cada setor
-% Pot = dbm2lin(P_BS);                       % Potência da antena transmissora
-% PN = dbm2lin(No+ 10*log10(bandWidth)+FN);  % Potência do Ruído
+% coeficientes do canal ao quadrado em dB (sem fast-fading)
+H_2d = G_BS + A + mtPL + mtNormal_2D;   % [dB]
 
-% calculando os coeficientes do canal 
-h_2D = canal(G_L, mtA_L, mtPL_L, mtLogNormal_2D, mtFastFad_2D);
+% coeficientes do canal ao quadrado em escala linear (sem fast-fading)
+h_2d = db2lin(H_2d);
 
-% capturando o setor de cada UE atraves do INDICES
-[X,I] = min(mtDifFhis_2D, [], 1);
+% Potência do Ruído Linear
+PN = dbm2lin(No+ 10*log10(bandWidth)+FN);  
 
-% modulo ao quadrado da matriz h_2D
-modQuadH_2d = abs(h_2D).^2;
+% Potência da antena transmissora
+Pot = dbm2lin(P_BS);                       
 
+% SINR
 Y = [];   % SINR
 
-% percorrendo cada coluna de 
-for ii = 1:size(mtDifFhis_2D,2)
-    
-    % somando todos os elementos do setor, menos o 
-    aux = sum(modQuadH_2d(:, ii)) - modQuadH_2d(I(ii), ii);
+% capturando o setor de cada UE atraves do INDICES
+[X,I] = min(sqrt(mtdifAngulos_d.^2), [], 1);
+
+% laço percorrendo cada UE para calcular a SINR
+for ii = 1:numUE,
+     
+    aux = sum(h_2d(:, ii)) - h_2d(I(ii), ii);
     
     % calculo da SNIR
-    Y(ii) = (Pot*modQuadH_2d(I(ii), ii))/(Pot*aux + PN);
-end 
+    Y(ii) = (Pot*h_2d(I(ii), ii))/(Pot*aux + PN);
+    
+end
+
+% SINR em dB
+Y_dB = 10*log10(Y);
 
 figure;
-% cdfplot(Y)
+cdfplot(Y_dB)
 
-% quantSector1 = length(find(I==1));
-% quantSector2 = length(find(I==2));
-% quantSector3 = length(find(I==3));
-
-% angulos azimutais dos UE's em [GRAUS]
-% angUEd = (180/pi).*angUE;          
-
-
-
+% angST = [60 180 300];
+% angUE = [30 60 90 120 150 180 210 240 270 300 330 360];
+% angST180 = wrapTo180(angST);
+% angUE180 = wrapTo180(angUE);
+% mt = [];
+% mt2 = [];
+% 
+% for ii = 1:length(angUE),
+%     mt(:, ii) = angUE(ii) - angST';
+% end
+% 
+% for ii = 1:length(angUE),
+%     mt2(:, ii) = angUE180(ii) - angST180';
+% end
