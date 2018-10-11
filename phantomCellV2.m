@@ -11,7 +11,7 @@ close all;
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-numUE = 1000;                                           % numero de UE's por macro-setores
+numUE = 20;                                         % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
@@ -109,21 +109,30 @@ xlabel('d (M)')
 ylabel('PL (DB)')
 title('Path Loss ')
 
+%% Dados Comuns para os Beamforming
 
-%%  BEAMFORMING 2D %%
 % mtFastFad_2D = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)]; % vetor de Desvanecimento Rapido para cada UE's
 % load('desvanecimento.mat');
+
+% matriz de shadowing normal
+mtNormal = sigma.*randn(S,numUE);    % Linhas: Setores; Colunas: Usuários
+
+% Angulo \theta de cada UE p/ cada BS do setor 
+mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [GRAUS]
+
+% Potência do Ruído Linear
+PN = dbm2lin(No+ 10*log10(bandWidth)+FN);  
+
+% Potência da antena transmissora
+Pot = dbm2lin(P_BS);                       
+
+
+%%  BEAMFORMING 2D %%
 
 % valores tirados do artigo
 fi3dB_2D = 70;                     % largura de feixe de 3 dB na horizontal [GRAUS]
 theta3dB_2D = 10;                  % largura de feixe de 3 dB na vertical   [GRAUS]
 angDownTild_2d = 8;                % angulo de down-tild (FIXO) [GRAUS]
-
-% matriz de shadowing normal
-mtNormal_2D = sigma.*randn(S,numUE);    % Linhas: Setores; Colunas: Usuários
-
-% Angulo \theta de cada UE p/ cada BS do setor 
-mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [GRAUS]
 
 % calculando o padrão vertical da antena
 Av_2D = -min(12.*(((mtThetaUE - angDownTild_2d)./theta3dB_2D).^2), SLA);    % linhas: setores, colunas: UE's
@@ -132,7 +141,7 @@ Av_2D = -min(12.*(((mtThetaUE - angDownTild_2d)./theta3dB_2D).^2), SLA);    % li
 Ah_2D = [];
 
 % posições dos UE's 
-posicoes_d = (180/pi).*angle(vtUePos); % [-180, 180]
+% posicoes_d = (180/pi).*angle(vtUePos); % [-180, 180]
 
 % diferença do angulo azimutal de cada UE p/ cada angulo de steering de cada setor
 mtdifAngulos_d = [];
@@ -168,22 +177,16 @@ end
 Ah_2D = -min(12.*((mtdifAngulos_d./fi3dB_2D).^2), Am);
 
 % Padrão de radiação TOTAL
-A = -min(-(Ah_2D + Av_2D), Am);
+A_2D = -min(-(Ah_2D + Av_2D), Am);
 
 % coeficientes do canal ao quadrado em dB (sem fast-fading)
-H_2d = G_BS + A + mtPL + mtNormal_2D;   % [dB]
+H_2d = G_BS + A_2D + mtPL + mtNormal;   % [dB]
 
 % coeficientes do canal ao quadrado em escala linear (sem fast-fading)
 h_2d = db2lin(H_2d);
 
-% Potência do Ruído Linear
-PN = dbm2lin(No+ 10*log10(bandWidth)+FN);  
-
-% Potência da antena transmissora
-Pot = dbm2lin(P_BS);                       
-
 % SINR
-Y = [];   % SINR
+Y2D = [];   % SINR
 
 % capturando o setor de cada UE atraves do INDICES
 [X,I] = min(sqrt(mtdifAngulos_d.^2), [], 1);
@@ -194,27 +197,91 @@ for ii = 1:numUE,
     aux = sum(h_2d(:, ii)) - h_2d(I(ii), ii);
     
     % calculo da SNIR
-    Y(ii) = (Pot*h_2d(I(ii), ii))/(Pot*aux + PN);
+    Y2D(ii) = (Pot*h_2d(I(ii), ii))/(Pot*aux + PN);
     
 end
 
 % SINR em dB
-Y_dB = 10*log10(Y);
+Y2D_dB = 10*log10(Y2D);
 
 figure;
-cdfplot(Y_dB)
+cdfplot(Y2D_dB)
+hold on;
 
-% angST = [60 180 300];
-% angUE = [30 60 90 120 150 180 210 240 270 300 330 360];
-% angST180 = wrapTo180(angST);
-% angUE180 = wrapTo180(angUE);
-% mt = [];
-% mt2 = [];
-% 
-% for ii = 1:length(angUE),
-%     mt(:, ii) = angUE(ii) - angST';
-% end
-% 
-% for ii = 1:length(angUE),
-%     mt2(:, ii) = angUE180(ii) - angST180';
-% end
+%% BEAMFORMING UE ESPECIFICO
+
+% valores tirados do artigo
+vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
+
+% angulo de donwtild p/ Beamforming UE especifico será igual a \theta de cada usuário
+angDownTild_Esp = atand((H_BS - H_UE)./(mtDist));
+
+% tensor para calcular o padrão de radiação vertical da antena para cada angulo \theta_3dB
+Av_Esp = [];
+
+% laço percorrendo cada angulo theta_3dB
+for ii = 1:length(vtTheta3dB_Esp),
+    
+    Av_Esp(:,:,ii) = -min(12.*(((mtThetaUE - angDownTild_Esp)./vtTheta3dB_Esp(ii)).^2), SLA);  
+
+end
+
+% tensor para calcular o padrão de radiação horizontal da antena para cada angulo \theta_3dB
+Ah_Esp = [];
+
+% diferença do angulo azimutal de cada UE p/ cada angulo de steering de cada setor
+mtdifAnguloEsp_d = mtdifAngulos_d;
+
+% laço percorrendo cada UE's
+for jj = 1:numUE,
+    
+    % mudando apenas a diferça de angulos na horizontal p/ o setor de cada UE
+    mtdifAnguloEsp_d( I(jj), jj) = 0;
+    
+end
+
+
+% laço percorrendo cada angulo fi_3dB
+for ii = 1:length(vtFi3dB_Esp),
+
+    % padrão de radiação HORIZONTAL
+    Ah_Esp(:,:,ii) = -min(12.*((mtdifAnguloEsp_d./vtFi3dB_Esp(ii)).^2), Am);
+    
+end
+
+% Padrão de radiação TOTAL
+A_ESP = -min(-(Ah_Esp + Av_Esp), Am);
+
+% coeficientes do canal ao quadrado em dB (sem fast-fading)
+H_ESP = G_BS + A_ESP + mtPL + mtNormal;   % [dB]
+
+% coeficientes do canal ao quadrado em escala linear (sem fast-fading)
+h_esp = db2lin(H_ESP);
+
+% SINR
+Y_ESP = [];   % SINR
+
+% laço percorrendo cada dimensao do tensor
+for jj = 1:length(vtFi3dB_Esp),
+    
+    % laço percorrendo cada UE para calcular a SINR
+    for ii = 1:numUE,
+        
+        aux = sum(h_esp(:, ii, jj)) - h_esp(I(ii), ii, jj);
+        
+        % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
+        Y_ESP(jj, ii) = (Pot*h_esp(I(ii), ii, jj))/(Pot*aux + PN);
+        
+    end
+    
+end
+
+% SINR em dB
+YESP_dB = 10*log10(Y_ESP);
+
+hold off;
+figure;
+cdfplot(YESP_dB(1, :))
+cdfplot(YESP_dB(2, :))
+cdfplot(YESP_dB(3, :))
