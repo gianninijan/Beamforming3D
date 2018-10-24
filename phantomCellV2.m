@@ -11,7 +11,7 @@ close all;
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-numUE = 20;                                         % numero de UE's por macro-setores
+numUE = 1000;                                         % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
@@ -47,6 +47,9 @@ for ii = 1:numUE,
     end
 end
 
+% vetor de posição de testes
+% vtUePos = [-71.1058-28.4379i  35.3306+37.7640i  44.0459-63.8599i  43.3912+44.9478i -74.6801-15.4539i];
+
 % vetor das posições da BS de cada setor
 ang_st = [pi/3, pi, 5*pi/3];                        % angulos de sterring p/ cada celula [Radianos]
 raio_bs = 0;                                        % raio das BS's - gerar aleatorio
@@ -77,10 +80,10 @@ sector2 = find( (angUE >= (2*pi/3)) & (angUE < (4*pi/3)) );   % indices dos UE's
 sector3 = find( (angUE >= (4*pi/3)) & (angUE < (2*pi)) );     % indices dos UE's que estão no setor 3
 
 % Testando o codigo acima dos setores: 
-resultado = vtUePos(sector2);          % captura as distancia dos UE's que estão dentro do setor 1
-plot(resultado,'ro');                  % plota o valores do 'resultados' com um circulo azul  
-
-hold off
+% resultado = vtUePos(sector2);          % captura as distancia dos UE's que estão dentro do setor 1
+% plot(resultado,'ro');                  % plota o valores do 'resultados' com um circulo azul  
+% 
+% hold off
 
 
 %% CALCULAR O PATH-LOSS DOS UE'S
@@ -211,7 +214,7 @@ hold on;
 %% BEAMFORMING UE ESPECIFICO
 
 % valores tirados do artigo
-vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtFi3dB_Esp = [70 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
 vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 
 % angulo de donwtild p/ Beamforming UE especifico será igual a \theta de cada usuário
@@ -231,12 +234,12 @@ end
 Ah_Esp = [];
 
 % diferença do angulo azimutal de cada UE p/ cada angulo de steering de cada setor
-mtdifAnguloEsp_d = mtdifAngulos_d;
+mtdifAnguloEsp_d = mtdifAngulos_d;   % linhas: setores, colunas: UEs
 
 % laço percorrendo cada UE's
 for jj = 1:numUE,
     
-    % mudando apenas a diferça de angulos na horizontal p/ o setor de cada UE
+    % mudando apenas a diferença de angulos na horizontal p/ o setor de cada UE
     mtdifAnguloEsp_d( I(jj), jj) = 0;
     
 end
@@ -280,8 +283,149 @@ end
 % SINR em dB
 YESP_dB = 10*log10(Y_ESP);
 
-hold off;
-figure;
+% hold on;
+% figure;
 cdfplot(YESP_dB(1, :))
-cdfplot(YESP_dB(2, :))
-cdfplot(YESP_dB(3, :))
+% cdfplot(YESP_dB(2, :))
+% cdfplot(YESP_dB(3, :))
+legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
+
+
+%% BEAMFORMING GRUPO-ESPECIFICO
+
+% valores tirados do artigo 
+vtFi3dB_gr = [70 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
+B = 16;                            % numero de padrões de feixes (ou grupos)
+Bh = 8;                            % numero de feixes horizontais p/ cada setor
+Bv = B/Bh;                         % numero de feixes vertiais p/ cada setor
+
+% mtDirFeixes = zeros(Bh, Bv);     % matriz de direção de feixes, onde cada elemento: (Fi_st, Theta_tild)
+% mtDirFeixes = cell(Bh, Bv);      % celula de direção de feixes
+
+angsFiSt_gr = zeros(1, Bh);
+andDownTild_gr = zeros(1, Bv);
+
+angHorInic = 0;
+angHorFinal = 360;
+passo = (angHorFinal - angHorInic)/(Bh*FatorSetor);
+
+angsFiSt_gr = linspace(angHorInic + (passo/2), angHorFinal - (passo/2), Bh*FatorSetor);
+
+% matriz de angulos \fi_st para uma celula
+mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh , FatorSetor*M);   
+mtAngsFiSt_gr = mtAngsFiSt_gr';                  % linha: setor, coluna: \fi_st 's p/ cada setor
+
+% angDownTild_gr = linspace(-90, 90, Bv);
+angDownTild_gr = [4 8];
+
+% matriz de angulos \theta_thild p/ uma celula;
+mtAngsThetaTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % linha: setor, coluna: \theta_tild 's p/ cada setor
+
+% diferença do angulo azimutal de cada UE de grupo
+mtdifAngsHor_gr = zeros(S, numUE);
+
+% laço percorrendo todos UE's
+for jj= 1:numUE,
+
+    % angulo azimutal de cada UE em [-180, 180]
+    anguloUE180 = (180/pi).*angle(vtUePos(jj));  
+   
+    % angulo azimutal de cada UE em [0, 360]
+    anguloUE360 = wrapTo360(anguloUE180);
+    
+    % calculo o angulo de steering para cada setor entre [0, 360]
+    angStrTo360 = (180/pi).*vtAngST;
+    
+    % calculo o angulo de steering para cada setor entre [-180, 180]
+    angStrTo180 = wrapTo180(angStrTo360);
+    
+    % laço percorrendo cada setor
+    for ii = 1:S,
+        
+        % se o setor da iteração for igual ao correspondente setor do UE, então
+        if ii == I(jj) 
+            % calcula a diferença absoluta entre o UE e \fi_st mais proximo 
+            vtAux = sqrt((anguloUE360 - mtAngsFiSt_gr(ii, :)).^2);
+            mtdifAngsHor_gr(ii, jj) = min(vtAux);    
+        else
+            % calcula a diferença entre angulos
+            dif1 = sqrt(((anguloUE360 - angStrTo360(ii)).^2));
+            dif2 = sqrt(((anguloUE180 - angStrTo180(ii)).^2));
+            difAngulo = min(dif1, dif2);
+            mtdifAngsHor_gr(ii, jj) = difAngulo;
+        end    
+    end  
+end
+
+% diferença de angulos de elevação de cada UE de grupo
+mtdifAngsVer_gr = zeros(S, numUE);
+
+% laço percorrendo todos UE's
+for jj= 1:numUE,
+    
+    % laço percorrendo cada setor
+    for ii = 1:S,
+        
+        % diferença entre o angulos de downtild
+        mtdifAngsVer_gr(ii, jj) = min(abs(mtThetaUE(ii,jj) - mtAngsThetaTild_gr(ii,:)));
+    end
+    
+end
+
+% tensor para calcular o padrão de radiação vertical da antena para cada angulo \theta_3dB
+Ah_gr = [];
+
+% calculando o padrão de radiação vertical
+for ii = 1:length(vtFi3dB_gr),
+    
+    % Ah para cada \fi_3dB
+    Ah_gr(:,:,ii) = -min(12.*((mtdifAngsHor_gr./vtFi3dB_gr(ii)).^2), Am);
+    
+end
+
+% tensor para calcular o padrão de radiação vertical da antena para cada angulo \theta_3dB
+Av_gr = [];
+
+% calculando o padrão de radiação vertical
+for ii = 1:length(vtTheta3dB_gr),
+    
+    % Av para cada \theta_3dB
+    Av_gr(:,:,ii) = -min(12.*((mtdifAngsVer_gr./vtTheta3dB_gr(ii)).^2), SLA);
+      
+end
+
+
+% Padrão de radiação TOTAL
+A_GR = -min(-(Av_gr + Ah_gr), Am);
+
+% coeficientes do canal ao quadrado em dB (sem fast-fading)
+H_GR = G_BS + A_GR + mtPL + mtNormal;   % [dB]
+
+% coeficientes do canal ao quadrado em escala linear (sem fast-fading)
+h_gr = db2lin(H_GR);
+
+% SINR
+Y_GR = [];   % SINR
+
+% laço percorrendo cada dimensao do tensor
+for jj = 1:length(vtFi3dB_Esp),
+  
+    % laço percorrendo cada UE para calcular a SINR
+    for ii = 1:numUE,
+        
+        % soma todo os coeficientes de canal até o UE menos o coef. do
+        % canal do setor que ele se encontra
+        aux = sum(h_gr(:, ii, jj)) - h_gr(I(ii), ii, jj);
+        
+        % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
+        Y_GR(jj, ii) = (Pot*h_gr(I(ii), ii, jj))/(Pot*aux + PN);     % linha: SNIR p/ cada \theta_3dB e \fi_3dB
+        
+    end
+end
+
+% SINR em dB
+YGR_dB = 10*log10(Y_GR);
+
+cdfplot(YGR_dB(1,:))
+legend('Conventional', 'UE especifica', '16 grupo');
