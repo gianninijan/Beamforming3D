@@ -11,7 +11,7 @@ close all;
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-numUE = 1000;                                         % numero de UE's por macro-setores
+numUE = 1000;                                        % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
@@ -426,6 +426,7 @@ end
 
 % SINR em dB
 YGR_dB = 10*log10(Y_GR);
-
 cdfplot(YGR_dB(1,:))
 legend('Conventional', 'UE especifica', '16 grupo');
+
+
