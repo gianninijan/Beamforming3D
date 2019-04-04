@@ -226,29 +226,64 @@ vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GR
 % angulo de donwtild p/ Beamforming UE especifico será igual a \theta de cada usuário
 angDownTild_Esp = [];
 
-minimo = min([length(sector1), length(sector2), length(sector3)]);
-
-% Calculando o angulo de downtild
+% Calculando o angulo de downtild 
 % laço percorrendo os usuários até o minimo valor 
-for jj = 1:S*minimo,
+for jj = 1:numUE,
     
-    % se UEj pertence ao setor 1, então: 
+    % se UEjj pertence ao setor 1, então: 
     if find(sector1 == jj),
-        angDownTild_Esp(1,jj) = atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(1))));
-        angDownTild_Esp(2,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector2(jj)) - vtBsSetor(2))));
-        angDownTild_Esp(3,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector3(jj)) - vtBsSetor(3))));
-    
-    % se UEj pertence ao setor 2, então:     
-    elseif find(sector2 == jj),
-        angDownTild_Esp(1,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector1(jj)) - vtBsSetor(1))));
-        angDownTild_Esp(2,jj) = atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(2))));
-        angDownTild_Esp(3,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector3(jj)) - vtBsSetor(3))));
+        [i, inst] = find(sector1 == jj);                     % inst (instante) é a posição do elemento jj no vetor sector1
         
+        angDownTild_Esp(1,jj) = mtThetaUE(1, jj);            % atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(1))));
+        
+        % se temos UE ativo no instante inst, então
+        if inst <= length(sector2), 
+            angDownTild_Esp(2,jj) = mtThetaUE(2, sector2(inst));   
+        else
+            angDownTild_Esp(2,jj) = angDownTild_2d;
+        end
+        
+        if inst <= length(sector3),
+            angDownTild_Esp(3,jj) = mtThetaUE(3, sector3(inst)); 
+        else
+            angDownTild_Esp(3,jj) = angDownTild_2d;
+        end
+    
+    % se UEjj pertence ao setor 2, então:     
+    elseif find(sector2 == jj),
+        [i, inst] = find(sector2 == jj);
+        
+        if inst <= length(sector1),
+            angDownTild_Esp(1,jj) = mtThetaUE(1, sector1(inst)); 
+        else
+            angDownTild_Esp(1,jj) = angDownTild_2d;
+        end
+        
+        angDownTild_Esp(2,jj) = mtThetaUE(2, jj);
+        
+        if inst <= length(sector3),
+            angDownTild_Esp(3,jj) = mtThetaUE(3, sector3(inst)); 
+        else
+            angDownTild_Esp(3,jj) = angDownTild_2d;
+        end
+
     % se UEj pertence ao setor 3, então:     
     elseif find(sector3 == jj),
-        angDownTild_Esp(1,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector1(jj)) - vtBsSetor(1))));
-        angDownTild_Esp(2,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector2(jj)) - vtBsSetor(2))));
-        angDownTild_Esp(3,jj) = atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(3))));
+        [i, inst] = find(sector3 == jj);  % inst (instante) é a posição do elemento jj no vetor sector3
+        
+        if inst <= length(sector1), 
+            angDownTild_Esp(1,jj) = mtThetaUE(1, sector1(inst));   
+        else
+           angDownTild_Esp(1,jj) = angDownTild_2d;      
+        end
+        
+        if inst <= length(sector2), 
+            angDownTild_Esp(2,jj) = mtThetaUE(2, sector2(inst));   
+        else
+            angDownTild_Esp(2,jj) = angDownTild_2d;
+        end
+        
+        angDownTild_Esp(3,jj) = mtThetaUE(3, jj);                   
     end
     
     
@@ -260,9 +295,10 @@ Av_Esp = [];
 % laço percorrendo cada angulo theta_3dB
 for ii = 1:length(vtTheta3dB_Esp),
     
-    Av_Esp(:,:,ii) = -min(12.*(((mtThetaUE(:,1:minimo) - angDownTild_Esp)./vtTheta3dB_Esp(ii)).^2), SLA);  
+    Av_Esp(:,:,ii) = -min(12.*(((mtThetaUE - angDownTild_Esp)./vtTheta3dB_Esp(ii)).^2), SLA);  
 
 end
+
 
 % tensor para calcular o padrão de radiação horizontal da antena para cada angulo \theta_3dB
 Ah_Esp = [];
@@ -398,7 +434,7 @@ mtdifAngsVer_gr = zeros(S, numUE);
 % laço percorrendo todos UE's
 for jj= 1:numUE,
     
-    % laço percorrendo cada setor
+     % laço percorrendo cada setor
     for ii = 1:S,
         
         % diferença entre o angulos de downtild
