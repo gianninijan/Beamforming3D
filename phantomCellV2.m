@@ -11,7 +11,7 @@ close all;
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-numUE = 1000;                                        % numero de UE's por macro-setores
+numUE = 10;                                        % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
@@ -36,7 +36,7 @@ H_UE = 1.5;                                          % altura da antena da estaç
 
 vtUePos = [];                             % vetor de posição de usuários
 
-% gerando os UE's uniformemente entre [10, R]
+% GERANDO AS POSIÇÕES DO UE's ~ U(10, R)
 for ii = 1:numUE,
     while true,
          vtUePos(ii) = (2*R*rand(1,1) - R) + 1j.*(2*R*rand(1,1) - R);
@@ -51,18 +51,17 @@ end
 % vtUePos = [-71.1058-28.4379i  35.3306+37.7640i  44.0459-63.8599i  43.3912+44.9478i -74.6801-15.4539i];
 
 % vetor das posições da BS de cada setor
-ang_st = [pi/3, pi, 5*pi/3];                        % angulos de sterring p/ cada celula [Radianos]
 raio_bs = 0;                                        % raio das BS's - gerar aleatorio
 ang_bs = 0;                                         % angulos de posições das BS's - gerar aleatorio
 posBS = raio_bs.*exp(1j*ang_bs);                    % forma exponencial das BS's
-vtBsSetor = repelem(posBS, FatorSetor);             % vetor de posição da BS de cada setor
-vtAngST = repmat(ang_st, 1, M);                     % angulo steering de cada setor [Radianos]
+vtBsSetor = repelem(posBS, FatorSetor);             % vetor posição da BS's p/ cada setor
+
 
 % plotando as POSIÇÕES da BS e UE's    
 hold on;
 circle(xBS,yBS,R);    
-plot(xBS,yBS,'*r','MarkerSize',16);       % plotando a BS
-plot(vtUePos,'*b','MarkerSize',12);       % plotando os UE's, representados por sinal de + da cor verde
+plot(xBS,yBS,'*r','MarkerSize',16);       % plotando a BS  (*vermelho)
+plot(vtUePos,'*b','MarkerSize',12);       % plotando os UE's (+azul)
 grid on;
 
 % gerando as LINHAS dos SETORES. 
@@ -74,7 +73,7 @@ plot(x,y,'y');
 legend('Celula', 'BS', 'UEs','Setores')
 
 % Encontrando os indices dos UE's de cada sector.
-angUE = wrapTo2Pi(angle(vtUePos));
+angUE = wrapTo2Pi(angle(vtUePos));                            % angUE ~ [0, 2*pi] radianos
 sector1 = find( (angUE >= 0) & (angUE < (2*pi/3)) );          % indices dos UE's que estão no setor 1
 sector2 = find( (angUE >= (2*pi/3)) & (angUE < (4*pi/3)) );   % indices dos UE's que estão no setor 2
 sector3 = find( (angUE >= (4*pi/3)) & (angUE < (2*pi)) );     % indices dos UE's que estão no setor 3
@@ -88,37 +87,40 @@ sector3 = find( (angUE >= (4*pi/3)) & (angUE < (2*pi)) );     % indices dos UE's
 
 %% CALCULAR O PATH-LOSS DOS UE'S
 
-% matriz de distancia de cada UE (coluna) para BS (linha) de cada setor
+% matriz de DISTÂNCIA de cada UE (coluna) para BS (linha) de cada setor
 mtDist = zeros(S,numUE);                             
 
-% laço percorrendo cada setor
+% laço percorrendo cada setor (coluna)
 for ii = 1:S
     
-    % laço percorrendo todos os usuários
+    % laço percorrendo todos os usuários (linha)
     for jj = 1:numUE
-        mtDist(ii,jj) = norm(vtUePos(jj) - vtBsSetor(ii));      % elementos da matriz de distância
+        mtDist(ii,jj) = norm(vtUePos(jj) - vtBsSetor(ii));      % DIM( mtDist ) = [Linhas, Colunas] = [Setores, UE's]
     end
     
 end
 
 % P/ calcular o setor de cada UE devemos levar em conta a distancia p/ cada BS do setor e angulo
-
 mtPL = PathLoss(mtDist, fc);                  % matriz de PATH LOSS de cada setor para cada usuário
 PL = min(mtPL);                               % valor minimo
+
 vtDistUEtoBS = min(mtDist);
+%[vtDistUEtoBS, POS] = min(mtDist, [], 1);
 figure;                                       % gera uma nova figura para plotar os graficos
 plot(sort(vtDistUEtoBS), sort(PL))
 xlabel('d (M)')
 ylabel('PL (DB)')
 title('Path Loss ')
 
-%% Dados Comuns para os Beamforming
 
-% mtFastFad_2D = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)]; % vetor de Desvanecimento Rapido para cada UE's
+%% DADOS COMUNS PARA OS BEAMFORMINGS
+
+% vetor de DESVANECIMENTO RÁPIDO para cada UE's
+% mtFastFad_2D = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)];
 % load('desvanecimento.mat');
 
 % matriz de shadowing normal
-mtNormal = sigma.*randn(S,numUE);    % Linhas: Setores; Colunas: Usuários
+mtNormal = sigma.*randn(S,numUE);    % dim( mtNormal ) = [Linhas, Colunas] = [Setores, Usuários]
 
 % Angulo \theta de cada UE p/ cada BS do setor 
 mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [GRAUS]
@@ -132,13 +134,17 @@ Pot = dbm2lin(P_BS);
 
 %%  BEAMFORMING 2D %%
 
+% angulos de BORESIGHT FIXO p/ a antena de cada setor, i.e, angulo azimutal na qual teremos o ganho máximo da antena 
+ang_st = [pi/3, pi, 5*pi/3];                        % angulos de boresight p/ cada celula [Radianos]
+vtAngST = repmat(ang_st, 1, M);                     % angulo steering de cada setor [Radianos]
+
 % valores tirados do artigo
 fi3dB_2D = 70;                     % largura de feixe de 3 dB na horizontal [GRAUS]
 theta3dB_2D = 10;                  % largura de feixe de 3 dB na vertical   [GRAUS]
 angDownTild_2d = 8;                % angulo de down-tild (FIXO) [GRAUS]
 
 % calculando o padrão vertical da antena
-Av_2D = -min(12.*(((mtThetaUE - angDownTild_2d)./theta3dB_2D).^2), SLA);    % linhas: setores, colunas: UE's
+Av_2D = -min(12.*(((mtThetaUE - angDownTild_2d)./theta3dB_2D).^2), SLA);    % [linhas, colunas] = [setores, UE's]
 
 % calculando o padrão horizontal da antena
 Ah_2D = [];
@@ -152,16 +158,16 @@ mtdifAngulos_d = [];
 % laço percorrendo cada UE
 for jj = 1:numUE,
     
-    % angulo de cada usuario em [-180, 180]
+    % angulo de cada UE em [-180º, 180º]
     anguloUE180 = (180/pi).*angle(vtUePos(jj));  
    
-    % angulo de cada usuario em [0, 360]
+    % angulo de cada UE em [0º, 360º]
     anguloUE360 = wrapTo360(anguloUE180);
     
-    % calculo o angulo de steering para cada setor entre [0, 360]
-    angStrTo360 = (180/pi).*vtAngST;
+    % calculo o angulo de steering para cada setor entre [0º, 360º]
+    angStrTo360 = (180/pi).*vtAngST;    % em, graus (º)
     
-    % calculo o angulo de steering para cada setor entre [-180, 180]
+    % calculo o angulo de steering para cada setor entre [-180º, 180º]
     angStrTo180 = wrapTo180(angStrTo360);
 
     % laço percorrendo cada setor
@@ -218,15 +224,43 @@ vtFi3dB_Esp = [70 10 5];            % largura de feixe de 3 dB na horizontal [GR
 vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 
 % angulo de donwtild p/ Beamforming UE especifico será igual a \theta de cada usuário
-angDownTild_Esp = atand((H_BS - H_UE)./(mtDist));
+angDownTild_Esp = [];
 
-% tensor para calcular o padrão de radiação vertical da antena para cada angulo \theta_3dB
+minimo = min([length(sector1), length(sector2), length(sector3)]);
+
+% Calculando o angulo de downtild
+% laço percorrendo os usuários até o minimo valor 
+for jj = 1:S*minimo,
+    
+    % se UEj pertence ao setor 1, então: 
+    if find(sector1 == jj),
+        angDownTild_Esp(1,jj) = atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(1))));
+        angDownTild_Esp(2,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector2(jj)) - vtBsSetor(2))));
+        angDownTild_Esp(3,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector3(jj)) - vtBsSetor(3))));
+    
+    % se UEj pertence ao setor 2, então:     
+    elseif find(sector2 == jj),
+        angDownTild_Esp(1,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector1(jj)) - vtBsSetor(1))));
+        angDownTild_Esp(2,jj) = atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(2))));
+        angDownTild_Esp(3,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector3(jj)) - vtBsSetor(3))));
+        
+    % se UEj pertence ao setor 3, então:     
+    elseif find(sector3 == jj),
+        angDownTild_Esp(1,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector1(jj)) - vtBsSetor(1))));
+        angDownTild_Esp(2,jj) = atand((H_BS - H_UE)./(norm(vtUePos(sector2(jj)) - vtBsSetor(2))));
+        angDownTild_Esp(3,jj) = atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(3))));
+    end
+    
+    
+end
+
+% TENSOR para calcular o padrão de RADIAÇÃO VERTICAL da antena para cada ANGULO \theta_3dB
 Av_Esp = [];
 
 % laço percorrendo cada angulo theta_3dB
 for ii = 1:length(vtTheta3dB_Esp),
     
-    Av_Esp(:,:,ii) = -min(12.*(((mtThetaUE - angDownTild_Esp)./vtTheta3dB_Esp(ii)).^2), SLA);  
+    Av_Esp(:,:,ii) = -min(12.*(((mtThetaUE(:,1:minimo) - angDownTild_Esp)./vtTheta3dB_Esp(ii)).^2), SLA);  
 
 end
 
