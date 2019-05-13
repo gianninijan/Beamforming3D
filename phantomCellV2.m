@@ -1,17 +1,15 @@
 %% (ARTIGO1) %%
 % 3D Beamforming Capacity Improvement in Macrocell-Assisted Small Cell Architeture
-
 clear all;
 clc;
 close all;
-
 
 %% SETUP SIMULATION  
 
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-numUE = 1000;                                           % numero de UE's por macro-setores
+numUE = 100;                                           % numero de UE's por macro-setores
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
@@ -36,14 +34,14 @@ H_UE = 1.5;                                          % altura da antena da estaç
 % vtUePos = raioUE.*exp(1j*angUE);        % vetor de posição das UE's de teste
 
 
+vtUePos = [];   % vetor p/ as posições aleatórios dos UE's 
+
 % GERANDO AS POSIÇÕES DO UE's ~ U(10, R)
-
-vtUePos = [];                             % vetor de posição de usuários aleatórios 
-
 for ii = 1:numUE,
     while true,
          vtUePos(ii) = (2*R*rand(1,1) - R) + 1j.*(2*R*rand(1,1) - R);
          
+         % se distancia do Ue for menor que o Raios e maior que 10, então:
          if (abs(vtUePos(ii)) < R) && (abs(vtUePos(ii)) > 10),
              break;
          end
@@ -51,7 +49,7 @@ for ii = 1:numUE,
 end
 
 
-% vetor das posições da BS de cada setor
+% GERANDO AS POSIÇÕES DO BS's
 raio_bs = 0;                                        % raio das BS's - gerar aleatorio
 ang_bs = 0;                                         % angulos de posições das BS's - gerar aleatorio
 posBS = raio_bs.*exp(1j*ang_bs);                    % forma exponencial das BS's
@@ -79,7 +77,7 @@ sector1 = find( (angUE >= 0) & (angUE < (2*pi/3)) );          % indices dos UE's
 sector2 = find( (angUE >= (2*pi/3)) & (angUE < (4*pi/3)) );   % indices dos UE's que estão no setor 2
 sector3 = find( (angUE >= (4*pi/3)) & (angUE < (2*pi)) );     % indices dos UE's que estão no setor 3
 
-% criando a matriz de setores (linhas) e UE's de cada setor 
+% criando a MATRIZ de SETORES (linhas) e indice do UE's de cada setor 
 maximo = max([length(sector1), length(sector2), length(sector3)]);
 mtUeSector = max(S, maximo);
 mtUeSector(1, 1:length(sector1)) = sector1;
@@ -95,15 +93,18 @@ mtUeSector(3, 1:length(sector3)) = sector3;
 
 %% CALCULAR O PATH-LOSS DOS UE'S
 
-% matriz de DISTÂNCIA de cada UE (coluna) para BS (linha) de cada setor
-mtDist = zeros(S,numUE);                             
+% MATRIZ de DISTÂNCIA de cada UE (coluna) para BS (linha) de cada setor
+mtDist = zeros(S,numUE);                            
 
 % laço percorrendo cada setor (coluna)
 for ii = 1:S
     
-    % laço percorrendo todos os usuários (linha)
+    % laço percorrendo os UE's (linha)
     for jj = 1:numUE
+        
+        % calculando a distancia de UEjj para cada BSii
         mtDist(ii,jj) = norm(vtUePos(jj) - vtBsSetor(ii));      % DIM( mtDist ) = [Linhas, Colunas] = [Setores, UE's]
+        
     end
     
 end
@@ -126,11 +127,11 @@ title('Path Loss ')
 % vetor de DESVANECIMENTO RÁPIDO para cada UE's
 % mtFastFad_2D = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)];
 
-% matriz de shadowing normal em dB
+% matriz de SHADOWING normal em dB
 mtNormal = sigma.*randn(S,numUE);    % dim( mtNormal ) = [Linhas, Colunas] = [Setores, Usuários]
 
-% Angulo \theta de cada UE p/ cada BS do setor 
-mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [GRAUS]
+% Angulo \theta [em, GRAUS (º)] de cada UE p/ cada BS do setor 
+mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [LINHA, COLUNA] = [SETOR, UE]
 
 % Potência do Ruído Linear
 PN = dbm2lin(No+ 10*log10(bandWidth)+FN);  
@@ -224,223 +225,111 @@ figure;
 cdfplot(Y2D_dB)
 hold on;
 
+
 %% BEAMFORMING UE ESPECIFICO %%
 
 % valores tirados do artigo
 vtFi3dB_Esp = [70 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
 vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 
-% angulo de donwtild p/ Beamforming UE especifico será igual a \theta de cada usuário
-angDownTild_Esp = [];
+% diferença entre o angulo ELEVAÇÃO de cada UEs para o \theta_tild de cada setor (em, GRAUS º)
+mtDifAngsVer_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
-% Calculando o angulo de downtild 
-% laço percorrendo os usuários  
+% laço percorrendo cada UE's  
 for jj = 1:numUE,
     
-    % se UEjj pertence ao setor 1, então: 
-    if find(sector1 == jj),
-        
-        [i, inst] = find(sector1 == jj);                     % inst (instante) é a posição do elemento jj no vetor sector1
-        
-        angDownTild_Esp(1,jj) = mtThetaUE(1, jj);            % atand((H_BS - H_UE)./(norm(vtUePos(jj) - vtBsSetor(1))));
-        
-        % se no instante inst temos UE ativo no setor2, então
-        if inst <= length(sector2), 
-            angDownTild_Esp(2,jj) = mtThetaUE(2, sector2(inst));   
-        else
-            angDownTild_Esp(2,jj) = angDownTild_2d;
-        end
-        
-        % se no instante inst temos UE ativo no setor3, então
-        if inst <= length(sector3),
-            angDownTild_Esp(3,jj) = mtThetaUE(3, sector3(inst)); 
-        else
-            angDownTild_Esp(3,jj) = angDownTild_2d;
-        end
+    % 'setor' é o nº do setor que UEjj pertence; 'inst' é o instante que o UEjj está ativo
+    [setor, inst] = find(mtUeSector == jj);  
     
-    % se UEjj pertence ao setor 2, então:     
-    elseif find(sector2 == jj),
-        [i, inst] = find(sector2 == jj);            % inst (instante) é a posição do elemento jj no vetor sector2
-        
-        angDownTild_Esp(2,jj) = mtThetaUE(2, jj);
-        
-        % se no instante inst temos UE ativo no setor1, então
-        if inst <= length(sector1),
-            angDownTild_Esp(1,jj) = mtThetaUE(1, sector1(inst)); 
-        else
-            angDownTild_Esp(1,jj) = angDownTild_2d;
-        end
-        
-        % se no instante inst temos UE ativo no setor3, então
-        if inst <= length(sector3),
-            angDownTild_Esp(3,jj) = mtThetaUE(3, sector3(inst)); 
-        else
-            angDownTild_Esp(3,jj) = angDownTild_2d;
-        end
-
-    % se UEj pertence ao setor 3, então:     
-    elseif find(sector3 == jj),
-        [i, inst] = find(sector3 == jj);  % inst (instante) é a posição do elemento jj no vetor sector3
-        
-        angDownTild_Esp(3,jj) = mtThetaUE(3, jj);  
-        
-        % se no instante inst temos UE ativo no setor1, então
-        if inst <= length(sector1), 
-            angDownTild_Esp(1,jj) = mtThetaUE(1, sector1(inst));   
-        else
-           angDownTild_Esp(1,jj) = angDownTild_2d;      
-        end
-        
-        % se no instante inst temos UE ativo no setor2, então
-        if inst <= length(sector2), 
-            angDownTild_Esp(2,jj) = mtThetaUE(2, sector2(inst));   
-        else
-            angDownTild_Esp(2,jj) = angDownTild_2d;
-        end
-        
-   end
+    % angulo de ELEVAÇÂO do UEjj, em:
+    angElevUE_Esp = mtThetaUE(setor, jj); % ~ [º,º] 
     
+   % laço percorrendo cada SETOR
+    for s = 1:S,
+        
+        % se o setor 's' é diferente do setor UEjj (laço externo), então
+        if s ~= setor,
+            
+            % se NÃO temos UE ATIVO no setor 's'  no instante s, então
+            if mtUeSector(s, inst) == 0,
+                angVertUeAtivo = angDownTild_2d;
+                mtDifAngsVer_Esp(s, jj) = min(abs(angElevUE_Esp - angVertUeAtivo));
+                
+            % se temos UE ATIVO no setor 's' no instante 's', então
+            else
+                angVertUeAtivo = mtThetaUE(s, mtUeSector(s, inst));
+                mtDifAngsVer_Esp(s, jj) = min(abs(angElevUE_Esp - angVertUeAtivo));
+            end
+        end
+    end   
 end
 
-% matriz que calcula a diferença entre os angulos no numerador Ah (padrão de radiação horizontal)
-mtdifAnguloEsp_d = zeros(S, numUE);
+% diferença entre o angulo AZIMUTAL de cada UEs para o \phi_st de cada setor (em, GRAUS º)
+mtdifAngHor_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
-% calculando a difença entre o angulo_fi de cada usuario com o angulo_fi dos setores 
 % laço percorrendo cada UE's
 for jj = 1:numUE,
     
+    % angulo azimutal do UE, em
     angUE180 = (180/pi)*angle(vtUePos(jj));       % ~ [-180º, 180º]
     angUE360 = wrapTo360(angUE180);               % ~ [0º, 360º]
     
-    % se UEjj pertence ao setor 1, então: 
-    if find(sector1 == jj),
-        
-        [i, inst] = find(sector1 == jj);                     % inst (instante) é a posição do elemento jj no vetor sector1
-        
-        % se no instante inst temos UE ativo no setor2, então
-        if inst <= length(sector2),
-            angUE180_S2 = (180/pi)*angle(vtUePos(sector2(inst)));          % ~ [-180º, 180º]
-            angUE360_S2 = wrapTo360(angUE180_S2);                          % ~ [0º, 360º]
-            dif1 = abs(angUE360 - angUE360_S2);
-            dif2 = abs(angUE180 - angUE180_S2);
-            mtdifAnguloEsp_d(2, jj) = min(dif1, dif2);
-        else
-           angUE360_S2 = (180/pi)*vtAngST(2);
-           angUE180_S2 = wrapTo180(angUE360_S2);
-           dif1 = abs(angUE360 - angUE360_S2);
-           dif2 = abs(angUE180 - angUE180_S2);
-           mtdifAnguloEsp_d(2, jj) = min(dif1, dif2); 
-        end
-        
-        % se no instante inst temos UE ativo no setor3, então
-        if inst <= length(sector3),
-            angUE180_S3 = (180/pi)*angle(vtUePos(sector3(inst)));          % ~ [-180º, 180º]
-            angUE360_S3 = wrapTo360(angUE180_S3);                          % ~ [0º, 360º]
-            dif1 = abs(angUE360 - angUE360_S3);
-            dif2 = abs(angUE180 - angUE180_S3);
-            mtdifAnguloEsp_d(3, jj) = min(dif1, dif2);
-        else
-           angUE360_S3 = (180/pi)*vtAngST(3);                              % ~ [0º, 360º]
-           angUE180_S3 = wrapTo180(angUE360_S3);                           % ~ [-180º, 180º]
-           dif1 = abs(angUE360 - angUE360_S3);
-           dif2 = abs(angUE180 - angUE180_S3);
-           mtdifAnguloEsp_d(3, jj) = min(dif1, dif2); 
-        end
+    % 'setor' é o nº do setor que UEjj pertence; 'inst' é o instante que o UEjj está ativo
+    [setor, inst] = find(mtUeSector == jj);       
     
-    % se UEjj pertence ao setor 2, então: 
-    elseif find(sector2 == jj),
+    % laço percorrendo cada SETOR
+    for s = 1:S,
         
-        [i, inst] = find(sector2 == jj);                     % inst (instante) é a posição do elemento jj no vetor sector2
-        
-        % se no instante inst temos UE ativo no setor1, então
-        if inst <= length(sector1),
-            angUE180_S1 = (180/pi)*angle(vtUePos(sector1(inst)));          % ~ [-180º, 180º]
-            angUE360_S1 = wrapTo360(angUE180_S1);                          % ~ [0º, 360º]
-            dif1 = abs(angUE360 - angUE360_S1);
-            dif2 = abs(angUE180 - angUE180_S1);
-            mtdifAnguloEsp_d(1, jj) = min(dif1, dif2);
-        else
-           angUE360_S1 = (180/pi)*vtAngST(1);
-           angUE180_S1 = wrapTo180(angUE360_S1);
-           dif1 = abs(angUE360 - angUE360_S1);
-           dif2 = abs(angUE180 - angUE180_S1);
-           mtdifAnguloEsp_d(1, jj) = min(dif1, dif2); 
-        end
-        
-        % se no instante inst temos UE ativo no setor3, então
-        if inst <= length(sector3),
-            angUE180_S3 = (180/pi)*angle(vtUePos(sector3(inst)));          % ~ [-180º, 180º]
-            angUE360_S3 = wrapTo360(angUE180_S3);                          % ~ [0º, 360º]
-            dif1 = abs(angUE360 - angUE360_S3);
-            dif2 = abs(angUE180 - angUE180_S3);
-            mtdifAnguloEsp_d(3, jj) = min(dif1, dif2);
-        else
-           angUE360_S3 = (180/pi)*vtAngST(3);
-           angUE180_S3 = wrapTo180(angUE360_S3);
-           dif1 = abs(angUE360 - angUE360_S3);
-           dif2 = abs(angUE180 - angUE180_S3);
-           mtdifAnguloEsp_d(3, jj) = min(dif1, dif2); 
-        end
-    
-    % se UEjj pertence ao setor 3, então:
-    elseif find(sector3 == jj),
-        
-        [i, inst] = find(sector3 == jj);                     % inst (instante) é a posição do elemento jj no vetor sector3
-        
-        % se no instante inst temos UE ativo no setor1, então
-        if inst <= length(sector1),
-            angUE180_S1 = (180/pi)*angle(vtUePos(sector1(inst)));          % ~ [-180º, 180º]
-            angUE360_S1 = wrapTo360(angUE180_S1);                          % ~ [0º, 360º]
-            dif1 = abs(angUE360 - angUE360_S1);
-            dif2 = abs(angUE180 - angUE180_S1);
-            mtdifAnguloEsp_d(1, jj) = min(dif1, dif2);
-        else
-           angUE360_S1 = (180/pi)*vtAngST(1);
-           angUE180_S1 = wrapTo180(angUE360_S1);
-           dif1 = abs(angUE360 - angUE360_S1);
-           dif2 = abs(angUE180 - angUE180_S1);
-           mtdifAnguloEsp_d(1, jj) = min(dif1, dif2); 
-        end
-        
-        % se no instante inst temos UE ativo no setor2, então
-        if inst <= length(sector2),
-            angUE180_S2 = (180/pi)*angle(vtUePos(sector2(inst)));          % ~ [-180º, 180º]
-            angUE360_S2 = wrapTo360(angUE180_S2);                          % ~ [0º, 360º]
-            dif1 = abs(angUE360 - angUE360_S2);
-            dif2 = abs(angUE180 - angUE180_S2);
-            mtdifAnguloEsp_d(2, jj) = min(dif1, dif2);
-        else
-           angUE360_S2 = (180/pi)*vtAngST(2);
-           angUE180_S2 = wrapTo360(angUE360_S2);
-           dif1 = abs(angUE360 - angUE360_S2);
-           dif2 = abs(angUE180 - angUE180_S2);
-           mtdifAnguloEsp_d(2, jj) = min(dif1, dif2); 
-        end
-    end  
+        % se o setor 's' é diferente do setor UEjj (laço externo), então
+        if s ~= setor,
+            
+            % se NÃO temos UE ATIVO no setor 's'  no instante s, então
+            if mtUeSector(s, inst) == 0,
+                % angulo do UE ativo no instante 'inst' no setor 's' será igual ao do angulo de steering do 2DBF para o setor 's'
+                angUeAtivo = (180/pi)*vtAngST(s);
+                
+                % calcular a diferença entre o angulos horizontais em
+                dif1 = min(abs(angUE360 - angUeAtivo));    % ~[0º, 360º]
+                dif1 = min(abs(angUE180 - wrapTo180(angUeAtivo)));               % ~[-180º, +180º]
+                
+                 mtdifAngHor_Esp(s, jj) = min(dif1, dif2);
+                 
+            % se temos UE ATIVO no setor 's' no instante 's', então
+            else
+                % angulo horizontal do UE ativo no instante 'inst' no setor 'setor'
+                angUeAtivo = wrapTo360((180/pi).*angle(vtUePos(mtUeSector(s, inst)))); % [0º, 360º]
+                
+                % calcular a diferença entre o angulos horizontais em
+                dif1 = min(abs(angUE360-angUeAtivo));  % ~[0º, 360º]
+                dif2 = min(abs(angUE180-wrapTo180(angUeAtivo))); % ~[-180º, +180º]
+                
+                mtdifAngHor_Esp(s, jj) = min(dif1, dif2);
+            end
+        end 
+    end 
 end
 
-% TENSORES para calcular o padrão de 
-Av_Esp = []; % RADIAÇÃO VERTICAL da antena para cada ANGULO \theta_3dB
-Ah_Esp = []; % RADIAÇÃO HORIZONTAL da antena para cada angulo \phi_3dB
-A_ESP = [];  % RADIAÇÃO TOTAL p/ Beamforming ESPECIFICO   
-
-% coeficientes do canal ao quadrado em dB (sem fast-fading)
-H_ESP = [];
+% TENSORES para calcular 
+Av_Esp = []; % padrão RADIAÇÃO VERTICAL da antena para cada ANGULO \theta_3dB
+Ah_Esp = []; % padrão RADIAÇÃO HORIZONTAL da antena para cada angulo \phi_3dB
+A_ESP = [];  % padrão RADIAÇÃO TOTAL p/ Beamforming ESPECIFICO   
+H_ESP = [];  % COEFICIENTE do CANAL ao quadrado em dB (sem fast-fading)
 
 % laço percorrendo cada angulo \theta_3dB, \phi_3dB
 for ii = 1:length(vtTheta3dB_Esp),
     
     % padrão de radiação VERTICAL
-    Av_Esp(:,:,ii) = -min(12.*(((mtThetaUE - angDownTild_Esp)./vtTheta3dB_Esp(ii)).^2), SLA);  
+    Av_Esp(:,:,ii) = -min(12.*((mtDifAngsVer_Esp./vtTheta3dB_Esp(ii)).^2), SLA);  
     
     % padrão de radiação HORIZONTAL
-    Ah_Esp(:,:,ii) = -min(12.*((mtdifAnguloEsp_d./vtFi3dB_Esp(ii)).^2), Am);
+    Ah_Esp(:,:,ii) = -min(12.*((mtdifAngHor_Esp./vtFi3dB_Esp(ii)).^2), Am);
     
     % Padrão de RADIAÇÃO TOTAL
     A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);
 
     % coeficientes do canal ao quadrado em dB (sem fast-fading)
     H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) + mtPL + mtNormal;   % [dB]
+    
 end
 
 % coeficientes do canal ao quadrado em escala linear (sem fast-fading)
@@ -449,16 +338,20 @@ h_esp = db2lin(H_ESP);
 % SINR para Beamforming ESPECIFICO
 Y_ESP = [];   % SINR
 
-% laço percorrendo cada dimensao do tensor
+% laço percorrendo as dimensões do tensor h_esp
 for jj = 1:length(vtFi3dB_Esp),
     
     % laço percorrendo cada UE para calcular a SINR
     for ii = 1:numUE,
         
-        aux = sum(h_esp(:, ii, jj)) - h_esp(I(ii), ii, jj);
+        % 'setor' que o UEjj pertence e o instante 'inst' que o UEjj está ativo
+        [setor, inst] = find(mtUeSector == ii);      
+        
+        % soma o h_esp interferentes de cada UE
+        aux = sum(h_esp(:, ii, jj)) - h_esp(setor, ii, jj);
         
         % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
-        Y_ESP(jj, ii) = (Pot*h_esp(I(ii), ii, jj))/(Pot*aux + PN);
+        Y_ESP(jj, ii) = (Pot*h_esp(setor, ii, jj))/(Pot*aux + PN);
         
     end
     
@@ -506,8 +399,8 @@ angDownTild_gr = [4 8];
 % matriz de angulos \theta_thild p/ uma celula;
 mtAngsThetaTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % linha: setor, coluna: \theta_tild 's p/ cada setor
 
-% diferença do angulo azimutal de cada UE de grupo
-mtdifAngsHor_gr = zeros(S, numUE);
+% diferença do angulo azimutal de cada UE para \phi_st de cada setor
+mtdifAngsHor_gr = zeros(S, numUE);  % [linha, coluna] = [Setor, UE] 
 
 % laço percorrendo todos UE's
 for jj = 1:numUE,
@@ -520,10 +413,8 @@ for jj = 1:numUE,
     
     anguloUE180 = (180/pi).*angle(vtUePos(jj));  % angulo azimutal do UE atual em [-180, 180]
     anguloUE360 = wrapTo360(anguloUE180);        % angulo azimutal do UE atual em [0, 360]
-    
-    %dif1 = min(sqrt(((anguloUE360 - angFiGrupo_360).^2)));
+   
     dif1 = min(abs(anguloUE360 - angFiGrupo_360));
-    %dif2 = min(sqrt(((anguloUE180 - angFiGrupo_180).^2)));
     dif2 = min(abs(anguloUE180 - angFiGrupo_180));
     difAngulo = min(dif1, dif2);
     
@@ -623,11 +514,14 @@ for jj = 1:length(vtFi3dB_Esp),
     % laço percorrendo cada UE para calcular a SINR
     for ii = 1:numUE,
         
-        % soma todo os coeficientes de canal até o UE menos o coef. do canal do setor que ele se encontra
-        aux = sum(h_gr(:, ii, jj)) - h_gr(I(ii), ii, jj);
+        % 'setor' que o UEjj pertence e o instante 'inst' que o UEjj está ativo
+        [setor, inst] = find(mtUeSector == ii);
+        
+        % soma h_gr interferentes para cada UE 
+        aux = sum(h_gr(:, ii, jj)) - h_gr(setor, ii, jj);
         
         % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
-        Y_GR(jj, ii) = (Pot*h_gr(I(ii), ii, jj))/(Pot*aux + PN);     % linha: SNIR p/ cada \theta_3dB e \fi_3dB
+        Y_GR(jj, ii) = (Pot*h_gr(setor, ii, jj))/(Pot*aux + PN);     % linha: SNIR p/ cada \theta_3dB e \fi_3dB
         
     end
 end
