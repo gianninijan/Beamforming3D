@@ -10,7 +10,7 @@ close all;
 M = 1;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-UEcadaSetor = 300;                                     % numero de UE's por (micro)setor
+UEcadaSetor = 300;                                   % numero de UE's por (micro)setor
 numUE = UEcadaSetor*S;                               % numero de UE's total
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
@@ -86,9 +86,11 @@ for ii = 1:numUE,
         
         % distancia do UE p/ BS do setor
         distUE = abs(vtUePos(ii) - vtBsSetor(ind));
+        
+        % angulo do UE em relação a posição da BS
 
         % se distancia do UE p/ BS do setor for menor que o Raio e maior que 10, então:
-        if (distUE < R) && (distUE > 10) &&  (anguloUE >= vtAngIncSetor(ind)) && (anguloUE < (vtAngIncSetor(ind) + (360/FatorSetor))),
+        if (distUE < R) && (distUE > 10) &&  (anguloUE >= vtAngIncSetor(ind))  && (anguloUE < (vtAngIncSetor(ind) + (360/FatorSetor))),
             break;
         end
     end
@@ -205,7 +207,7 @@ mtdifAngsHor_2D= [];
 for jj = 1:numUE,
     
     % angulo de cada UE ~ [-180º, 180º]
-    anguloUE180 = (180/pi).*angle(vtUePos(jj)); % em, graus (º)  
+    anguloUE180 = (180/pi).*angle(vtUePos(jj)); % em, graus (º)   
    
     % angulo de cada UE ~ [0º, 360º]
     anguloUE360 = wrapTo360(anguloUE180); % em, graus (º)
@@ -260,15 +262,11 @@ end
 % SINR em dB
 Y2D_dB = 10*log10(Y2D);
 
-figure;
-cdfplot(Y2D_dB)
-hold on;
-
 
 %% BEAMFORMING UE ESPECIFICO %%
 
 % valores tirados do artigo
-vtFi3dB_Esp = [70 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
 vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 
 % matriz de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
@@ -384,18 +382,11 @@ end
 % SINR em dB
 YESP_dB = 10*log10(Y_ESP);
 
-hold on;
-% figure;
-cdfplot(YESP_dB(1, :))
-%cdfplot(YESP_dB(2, :))
-%cdfplot(YESP_dB(3, :))
-%legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
-
 
 %% BEAMFORMING GRUPO-ESPECIFICO
 
 % valores tirados do artigo 
-vtFi3dB_gr = [70 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtFi3dB_gr = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
 vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 B = 16;                            % numero de padrões de feixes (ou, GRUPOS)
 Bh = 8;                            % numero de feixes horizontais p/ cada setor
@@ -418,7 +409,7 @@ mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh , FatorSetor*M);
 mtAngsFiSt_gr = mtAngsFiSt_gr';                  % [linha, coluna] = [setor, angulo Thi_st p/ cada grupo do setor]
 
 % angDownTild_gr = linspace(-90, 90, Bv);
-angDownTild_gr = [4 8];
+angDownTild_gr = [8 10];
 
 % matriz de angulos \theta_thild p/ uma celula;
 mtAngsThetaTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % linha: setor, coluna: \theta_tild 's p/ cada setor
@@ -542,7 +533,22 @@ end
 
 % SINR em dB
 YGR_dB = 10*log10(Y_GR);
-cdfplot(YGR_dB(1,:))
+
+
+%% PLOTANDO OS GRAFICOS
+
+
+figure;
+cdfplot(Y2D_dB)          % plotar SINR p/ 2DBF ou Beamforming Convencional
+hold on;
+
+% figure;
+cdfplot(YESP_dB(1, :))   % plotar SINR p/ 3DBF UE-Especifico
+%cdfplot(YESP_dB(2, :))
+%cdfplot(YESP_dB(3, :))
+%legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
+
+cdfplot(YGR_dB(1,:))     % plotar SINR p/ 3DBF Grupo-UE    
 legend('Conventional', 'UE especifica', '16 grupo');
 
 
