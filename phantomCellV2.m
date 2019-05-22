@@ -282,15 +282,20 @@ for jj = 1:numUE,
     if find(mtUeSector(:, inst) == 0), 
         continue;
     end
-    
-    % angulo de ELEVAÇÂO do UEjj será igual o angulo de INCLINAÇÃO do BS_setor:
-    angElevUE_Esp = mtThetaUE(setor, jj); % ~ [º,º]
         
     % laço percorrendo cada SETOR
     for s = 1:S,
+        
         % se o setor 's' é diferente do 'setor' UEjj (laço externo), então
         if s ~= setor,
-            angVertUeAtivo = mtThetaUE(s, mtUeSector(s, inst)); % ang. de INCLINAÇÃO da BS_s sera igual o ang. de Elevação do UE ativo nesse setor_s 
+            
+            % angulo de ELEVAÇÂO do UEjj em relação a BS_s:
+            angElevUE_Esp = mtThetaUE(s, jj); % ~ [º,º]
+            
+            % ang. de INCLINAÇÃO (TILD) da BS_s será igual o ang. de Elevação do UE ativo no SLOT DE TEMPO 'inst' nesse setor_s
+            angVertUeAtivo = mtThetaUE(s, mtUeSector(s, inst));
+            
+            % calculando a diferença entre os ANGULOS VERTICAIS ACIMA
             mtDifAngsVer_Esp(s, jj) = abs(angElevUE_Esp - angVertUeAtivo); 
         end
     end
@@ -405,7 +410,7 @@ passo = (angHorFinal - angHorInic)/(Bh*FatorSetor);
 angsFiSt_gr = linspace(angHorInic + (passo/2), angHorFinal - (passo/2), Bh*FatorSetor);
 
 % matriz de angulos \fi_st para uma celula
-mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh , FatorSetor*M);   
+mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh , FatorSetor);   
 mtAngsFiSt_gr = mtAngsFiSt_gr';                  % [linha, coluna] = [setor, angulo Thi_st p/ cada grupo do setor]
 
 % angDownTild_gr = linspace(-90, 90, Bv);
