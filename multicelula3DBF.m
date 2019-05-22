@@ -10,7 +10,7 @@ close all;
 M = 7;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-UEcadaSetor = 5;                                     % numero de UE's por (micro)setor
+UEcadaSetor = 50;                                     % numero de UE's por (micro)setor
 numUE = UEcadaSetor*S;                               % numero de UE's total
 R = 80;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
@@ -116,7 +116,8 @@ legend('Celula', 'BS', 'UEs')
 
 %% CONSTRUINDO A MATRIZ INDICE DO UE'S POR SETORES (linhas) %%
 
-mtUeSector = zeros(S, UEcadaSetor);  % [linhas, colunas] = [setores, indice do UE de cada setor ativo no SLOT de TEMPO]
+% cada elemento representa o indice do UE no vtUePos q pertence ao Setor da Linha e está ativo no instante de tempo 1.  
+mtUeSector = zeros(S, UEcadaSetor);  % [linhas, colunas] = [setores, SLOT de TEMPO]
 
 % laço percorrendo cada UE 
 for ii = 1:numUE,
@@ -206,7 +207,7 @@ title('Path Loss ')
 % matriz de SHADOWING normal em dB
 mtNormal = sigma.*randn(S,numUE);    % [Linhas, Colunas] = [Setores, UE's]
 
-% matriz de Angulos de ELEVAÇÃO [em, GRAUS (º)] de cada UE p/ cada BS do setor 
+% matriz de Angulos de ELEVAÇÃO [em, GRAUS (º)]  de cada UE p/ cada BS do setor 
 mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [LINHA, COLUNA] = [SETOR, UE]
 
 % Potência do Ruído Linear
@@ -227,7 +228,7 @@ fi3dB_2D = 70;                     % largura de feixe de 3 dB na horizontal [GRA
 theta3dB_2D = 10;                  % largura de feixe de 3 dB na vertical   [GRAUS] -> Pág. 4837, Simulation Setup
 angDownTild_2d = 8;                % angulo de down-tild (FIXO) [GRAUS] -> Pág. 4836, Simulation Setup
 
-% MATRIZ de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
+% MATRIZ de diferença entre o angulo AZIMUAL de cada UE's para o angulo de BORESIGHT da BS de cada setor (em, GRAUS º)
 mtdifAngsHor_2D = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
 % laço percorrendo cada UE's p/ calcular os valores da matriz 'mtdifAngsHor_2D'
@@ -236,12 +237,12 @@ for ii = 1:numUE,
     % 'setor' é o nº do setor que UEii pertence; 'inst' é o SLOT de TEMPO que o UEjj está ativo
     [setor, inst] = find(mtUeSector == ii);
     
-    % posição do UEii em relação a BS do setor
+    % posição do UEii em relação a BS_setor
     pos_x = real(vtUePos(ii)) - real(vtBsSetor(setor));
     pos_y = imag(vtUePos(ii)) - imag(vtBsSetor(setor));
     z_aux = pos_x + 1j*pos_y;  
     
-    % angulo do UEii em relação a posição da BS,setor
+    % angulo AZIMUTAL do UEii em relação a posição da BS_setor, em
     anguloUE180 = (180/pi)*angle(z_aux);         % ~ [-180º, +180º]
     anguloUE360 = wrapTo360(anguloUE180);        % ~ [0º, 360º]
     
@@ -252,7 +253,7 @@ for ii = 1:numUE,
     % calculando a diferença entre o ang. de AZIMUTAL da UEii com o angulo de STEERING da BS_setor
     mtdifAngsHor_2D(setor, ii) = min(abs(anguloUE360 - angStrTo360), abs(anguloUE180 - angStrTo180));
     
-    % laço percorrendo cada angulo de STEERING da célula
+    % laço percorrendo cada SETOR
     for s = 1:S,
         
         % se o setor 's' é diferente do 'setor' UEii (laço externo), então
@@ -263,7 +264,7 @@ for ii = 1:numUE,
             pos_yRel = imag(vtUePos(ii)) - imag(vtBsSetor(s));
             zRel = pos_xRel + 1j*pos_yRel;
             
-            % angulo do UEii em relação a posição da BS,s
+            % angulo AZIMUTAL de UEii em relação a posição da BS,s
             anguloRelUE180 = (180/pi)*angle(zRel);             % ~ [-180º, +180º]
             anguloRelUE360 = wrapTo360(anguloRelUE180);        % ~ [0º, 360º]
     
@@ -282,7 +283,7 @@ Ah_2D = -min(12.*((mtdifAngsHor_2D./fi3dB_2D).^2), Am);
 
 
 
-% MATRIZ de diferença entre o angulo AZIMUTAL de cada UEs para o angulo de BORESIGHT da BS de cada setor (em, GRAUS º)
+% MATRIZ de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
 mtdifAngsVer_2D = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
 % calculando os valores da matriz 'mtdifAngsVer_2D'
@@ -328,13 +329,13 @@ cdfplot(Y2D_dB)     % plota a CDF do SINR p/ 2DBF em dB
 hold on;
 
 
-%% BEAMFORMING UE ESPECIFICO %%
+%% BEAMFORMING UE ESPECIFICO (3DBF UE-SPECIFIC) %%
 
 % valores tirados do artigo
 vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] --> (Fig. 3, p. 4836)
 vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] --> (Fig. 3, p. 4836)
 
-% matriz de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
+% MATRIZ de DIFERENÇA entre o ang. ELEVAÇÃO de cada UE para o ang. de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
 mtDifAngsVer_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
 % laço percorrendo cada UE's p/ calcular os valores da matriz 'mtDifAngsVer_Esp'
@@ -342,62 +343,66 @@ for jj = 1:numUE,
     
     % 'setor' é o nº do setor que UEjj pertence; 'inst' é o SLOT de TEMPO que o UEjj está ativo
     [setor, inst] = find(mtUeSector == jj);  
-    
-    % se temos algum UE INATIVO no slot de tempo 'inst', então pulamos os calculos abaixo para UEjj
-    if find(mtUeSector(:, inst) == 0), 
-        continue;
-    end
-    
-    % angulo de ELEVAÇÂO do UEjj será igual o angulo de INCLINAÇÃO do BS_setor:
-    angElevUE_Esp = mtThetaUE(setor, jj); % ~ [º,º]
         
     % laço percorrendo cada SETOR
     for s = 1:S,
+        
         % se o setor 's' é diferente do 'setor' UEjj (laço externo), então
         if s ~= setor,
-            angVertUeAtivo = mtThetaUE(s, mtUeSector(s, inst)); % ang. de INCLINAÇÃO da BS_s sera igual o ang. de Elevação do UE ativo nesse setor_s 
-            mtDifAngsVer_Esp(s, jj) = abs(angElevUE_Esp - angVertUeAtivo); 
+            
+            % angulo de ELEVAÇÂO do UEjj em relação BS_s
+            angElevRelUE_Esp = mtThetaUE(s, jj);                   % ~ [º,º]
+            
+            % ang. de INCLINAÇÃO (TILD) da BS_s será igual o ang. de Elevação do UE ativo no SLOT DE TEMPO 'inst' nesse setor_s
+            angVertUeAtivo = mtThetaUE(s, mtUeSector(s, inst));  
+            
+            % calculando a diferença entre o ang. de ELEVAÇÃO do UEjj com BS_s E o ang. de INCLINAÇÂO (TILD) da BS_s 
+            mtDifAngsVer_Esp(s, jj) = abs(angElevRelUE_Esp - angVertUeAtivo); 
         end
     end
 end    
 
 
-% matriz de diferença entre o angulo AZIMUTAL de cada UEs para o angulo de STEERING da BS de cada setor (em, GRAUS º)
-mtdifAngHor_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
+% MATRIZ de DIFERENÇA entre o angulo AZIMUTAL de cada UEs para o angulo de STEERING da BS de cada setor (em, GRAUS º)
+mtDifAngHor_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
-% laço percorrendo cada UE's p/ calcular os valores da matriz 'mtdifAngHor_Esp'
+% laço percorrendo cada UE's p/ calcular os valores da matriz 'mtDifAngHor_Esp'
 for jj = 1:numUE,
     
-    % angulo azimutal do UE, em
-    angUE180 = (180/pi)*angle(vtUePos(jj));       % ~ [-180º, 180º]
-    angUE360 = wrapTo360(angUE180);               % ~ [0º, 360º] 
-    
-    % 'setor' é o nº do setor que UEjj pertence; 'inst' é o instante que o UEjj está ativo
-    [setor, inst] = find(mtUeSector == jj);       
-    
-    % se temos algum UE INATIVO no slot de tempo 'inst', então pulamos os calculos abaixo para UEjj
-    if find(mtUeSector(:, inst) == 0), 
-        continue;
-    end
-    
+    % 'setor' é o nº do setor que UEjj pertence; 'inst' é o SLOT DE TEMPO que o UEjj está ativo
+    [setor, inst] = find(mtUeSector == jj);
+     
     % laço percorrendo cada SETOR
     for s = 1:S,
         
         % se o setor 's' é diferente do setor UEjj (laço externo), então
         if s ~= setor,
-            % angulo horizontal do UE ativo no instante 'inst' no setor 'setor'
-            angUeAtivo = wrapTo360((180/pi).*angle(vtUePos(mtUeSector(s, inst)))); % [0º, 360º]
             
-            % calcular a diferença entre o angulos horizontais em
-            dif1 = min(abs(angUE360-angUeAtivo));  % ~[0º, 360º]
-            dif2 = min(abs(angUE180-wrapTo180(angUeAtivo))); % ~[-180º, +180º]
+            % Posição do UEjj em relação a BS_s 
+            pos_xRel = real(vtUePos(jj)) - real(vtBsSetor(s));
+            pos_yRel = imag(vtUePos(jj)) - imag(vtBsSetor(s));
+            zRel = pos_xRel + 1j*pos_yRel;
             
-            mtdifAngHor_Esp(s, jj) = min(dif1, dif2);    
+            % angulo AZIMUTAL de UEjj em relação a posição da BS_s, em
+            anguloRelUE180 = (180/pi)*angle(zRel);             % ~ [-180º, +180º]
+            anguloRelUE360 = wrapTo360(anguloRelUE180);        % ~ [0º, 360º]
+            
+            % Posição do UE ativo no setor_s no instante 'inst'
+            xBS_rel = real(vtUePos(mtUeSector(s, inst))) - real(vtBsSetor(s));
+            yBS_rel = imag(vtUePos(mtUeSector(s, inst))) - imag(vtBsSetor(s));
+            zBS_rel = xBS_rel + 1j*yBS_rel;
+            
+            % angulo de STEERING da BS do setor_s no SLOT DE TEMPO 'inst'
+            angsStrBS180 = (180/pi).*angle(zBS_rel);       % [-180º, +180º]
+            angsStrBS360 = wrapTo360(angsStrBS180);        % [0º, 360º]
+            
+            % calculando a diferença entre o ang. de AZIMUTAL da UEjj com o ang. de STEERING da BS_s  
+            mtDifAngHor_Esp(s, jj) = min(abs(anguloRelUE360 - angsStrBS360), abs(anguloRelUE180 - angsStrBS180));    
         end 
     end 
 end
 
-% TENSORES para calcular 
+% TENSORES para calcular o
 Av_Esp = []; % padrão RADIAÇÃO VERTICAL da antena para cada ANGULO \theta_3dB
 Ah_Esp = []; % padrão RADIAÇÃO HORIZONTAL da antena para cada angulo \phi_3dB
 A_ESP = [];  % padrão RADIAÇÃO TOTAL p/ Beamforming ESPECIFICO   
@@ -410,7 +415,7 @@ for ii = 1:length(vtTheta3dB_Esp),
     Av_Esp(:,:,ii) = -min(12.*((mtDifAngsVer_Esp./vtTheta3dB_Esp(ii)).^2), SLA);  
     
     % padrão de radiação HORIZONTAL
-    Ah_Esp(:,:,ii) = -min(12.*((mtdifAngHor_Esp./vtFi3dB_Esp(ii)).^2), Am);
+    Ah_Esp(:,:,ii) = -min(12.*((mtDifAngHor_Esp./vtFi3dB_Esp(ii)).^2), Am);
     
     % Padrão de RADIAÇÃO TOTAL
     A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);
@@ -423,7 +428,7 @@ end
 % coeficientes do canal ao quadrado em escala linear (sem fast-fading)
 h_esp = db2lin(H_ESP);
 
-% SINR para Beamforming ESPECIFICO
+% SINR para BEAMFORMING ESPECIFICO
 Y_ESP = [];   % SINR
 
 % laço percorrendo as dimensões do tensor h_esp
@@ -455,38 +460,38 @@ cdfplot(YESP_dB(1, :))
 %legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
 
 
-%% BEAMFORMING GRUPO-ESPECIFICO
+%% BEAMFORMING GRUPO-ESPECIFICO (3DBF UE-GROUP) %%
 
 % valores tirados do artigo 
-vtFi3dB_gr = [70 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
-vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
+vtFi3dB_gr = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] ---> (Fig. 3, p. 4836)
+vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] ---> (Fig. 3, p. 4836)
 B = 16;                            % numero de padrões de feixes (ou, GRUPOS)
-Bh = 8;                            % numero de feixes horizontais p/ cada setor
-Bv = B/Bh;                         % numero de feixes vertiais p/ cada setor
+Bh = 8;                            % numero de feixes HORIZONTAIS p/ cada setor
+Bv = B/Bh;                         % numero de feixes VERTICAIS p/ cada setor
 
 % mtDirFeixes = zeros(Bh, Bv);     % matriz de direção de feixes, onde cada elemento: (Fi_st, Theta_tild)
 % mtDirFeixes = cell(Bh, Bv);      % celula de direção de feixes
 
-angsFiSt_gr = zeros(1, Bh);
-andDownTild_gr = zeros(1, Bv);
-
-angHorInic = 0;
+% Calculando os angulos de STEERING p/ cada setor
+angHorInic = 0;   
 angHorFinal = 360;
 passo = (angHorFinal - angHorInic)/(Bh*FatorSetor);
-
 angsFiSt_gr = linspace(angHorInic + (passo/2), angHorFinal - (passo/2), Bh*FatorSetor);
 
-% matriz de angulos \fi_st para uma celula
-mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh , FatorSetor*M);   
-mtAngsFiSt_gr = mtAngsFiSt_gr';                  % [linha, coluna] = [setor, angulo Thi_st p/ cada grupo do setor]
+% calculando a matriz de angulos de STEERING p/ cada célula
+mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh, FatorSetor);    
+mtAngsFiSt_gr = mtAngsFiSt_gr';                          % [linha, coluna] = [setor, angulo Thi_st p/ cada grupo do setor]
 
 % angDownTild_gr = linspace(-90, 90, Bv);
-angDownTild_gr = [4 8];
+andDownTild_gr = zeros(1, Bv);
+angTILD_Inicio = 8;
+angTILD_Final = 10;
+angDownTild_gr = [angTILD_Inicio:2:angTILD_Final];
 
-% matriz de angulos \theta_thild p/ uma celula;
-mtAngsThetaTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % linha: setor, coluna: \theta_tild 's p/ cada setor
+% matriz de angulos de INCLINAÇÃO p/ uma celula;
+mtAngsThetaTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % [linha, coluna] = [setor, grupos do ang. Inclinação] 
 
-% matriz DIFERENÇA do ang. AZIMUTAL de cada UE para o ang. STEERING (\phi_st) da BS de cada setor
+% matriz DIFERENÇA do ang. AZIMUTAL de cada UE para o ang. STEERING da BS de cada setor
 mtdifAngsHor_gr = zeros(S, numUE);  % [linha, coluna] = [Setor, UE] 
 
 % laço percorrendo todos UE's p/ calcular os valores da matriz 'mtdifAngsHor_gr'
@@ -494,11 +499,6 @@ for jj = 1:numUE,
     
     % 'setor' que o UEjj pertence e o slot_de_tempo 'inst' que o UEjj está ativo 
     [setor, inst] = find(mtUeSector == jj);    
-    
-    % se temos algum UE INATIVO no slot de tempo 'inst', então pulamos os calculos abaixo para UEjj
-    if find(mtUeSector(:, inst) == 0), 
-        continue;
-    end
     
     % calcula a diferença entre angulos
     angFiGrupo_360 = mtAngsFiSt_gr(setor,:);     % GRUPOS de angulos de steering [0º, 360] disponiveis para o setor_'setor' onde UEjj pertence
