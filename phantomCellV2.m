@@ -4,7 +4,6 @@ clear all;
 clc;
 close all;
 
-
 %% SETUP SIMULATION  
 
 M = 1;                                               % numero de celulas
@@ -12,7 +11,7 @@ FatorSetor = 3;                                      % Fator de setorização, i.e
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
 UEcadaSetor = 300;                                   % numero de UE's por (micro)setor
 numUE = UEcadaSetor*S;                               % numero de UE's total
-R = 80;                                              % raio da pequena celula
+R = 250;                                             % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
 vtSector = [ R*exp( 1j*[0 2*pi/3 4*pi/3] ) ];        % vetor marcação dos pontos de sectorização
@@ -109,7 +108,7 @@ y = zeros(1,2*length(vtSector));
 x([2:2:2*length(vtSector)]) = real(vtSector);
 y([2:2:2*length(vtSector)]) = imag(vtSector);
 plot(x,y,'y');
-legend('Celula', 'BS', 'UEs','Setores')
+legend('Celula', 'Estação base', 'Usuários','Setores')
 
 % Encontrando os indices dos UE's de cada sector.
 angUE = wrapTo2Pi(angle(vtUePos));                            % angUE ~ [0, 2*pi] radianos
@@ -160,7 +159,7 @@ figure;                                       % gera uma nova figura para plotar
 plot(sort(vtDistUEtoBS), sort(PL))
 xlabel('d (M)')
 ylabel('PL (DB)')
-title('Path Loss ')
+title('Perda de Caminho ')
 
 
 %% DADOS COMUNS PARA OS BEAMFORMINGS
@@ -237,7 +236,7 @@ Ah_2D = -min(12.*((mtdifAngsHor_2D./fi3dB_2D).^2), Am);
 A_2D = -min(-(Ah_2D + Av_2D), Am);
 
 % COEFICIENTES do CANAL ao quadrado em dB (sem fast-fading)
-H_2d = G_BS + A_2D + mtPL + mtNormal;   % [dB]
+H_2d = G_BS + A_2D - mtPL + mtNormal;   % [dB]
 
 % coeficientes do canal ao quadrado em escala linear (sem fast-fading)
 h_2d = db2lin(H_2d);
@@ -356,7 +355,7 @@ for ii = 1:length(vtTheta3dB_Esp),
     A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);
 
     % coeficientes do canal ao quadrado em dB (sem fast-fading)
-    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) + mtPL + mtNormal;   % [dB]
+    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) - mtPL + mtNormal;   % [dB]
     
 end
 
@@ -508,7 +507,7 @@ for ii = 1:length(vtTheta3dB_Esp),
     A_GR(:,:,ii) = -min(-(Av_gr(:,:,ii) + Ah_gr(:,:,ii)), Am);
     
     % coeficientes do canal ao quadrado em dB (sem fast-fading)
-    H_GR(:,:,ii) = G_BS + A_GR(:,:,ii) + mtPL + mtNormal;   % [dB]
+    H_GR(:,:,ii) = G_BS + A_GR(:,:,ii) - mtPL + mtNormal;   % [dB]
 end
 
 
@@ -554,6 +553,7 @@ cdfplot(YESP_dB(1, :))   % plotar SINR p/ 3DBF UE-Especifico
 %legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
 
 cdfplot(YGR_dB(1,:))     % plotar SINR p/ 3DBF Grupo-UE    
-legend('Conventional', 'UE especifica', '16 grupo');
-
-
+legend('2DBF', '3DBF-Usuários', '3DBF-Grupos (16 grupo)');
+xlabel('SINR (dB)')
+ylabel('CDF')
+title('')

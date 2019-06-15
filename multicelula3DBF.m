@@ -1,4 +1,4 @@
-%% (ARTIGO1) %%
+ %% (ARTIGO1) %%
 % 3D Beamforming Capacity Improvement in Macrocell-Assisted Small Cell Architeture
 clear all;
 clc;
@@ -10,9 +10,9 @@ close all;
 M = 7;                                               % numero de celulas
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-UEcadaSetor = 75;                                     % numero de UE's por (micro)setor
+UEcadaSetor = 100;                                    % numero de UE's por (micro)setor
 numUE = UEcadaSetor*S;                               % numero de UE's total
-R = 80;                                              % raio da pequena celula
+R = 250;                                              % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
 % vtSector = [ R*exp( 1j*[0 2*pi/3 4*pi/3] ) ];      % vetor marcação dos pontos de sectorização
@@ -21,7 +21,7 @@ fc = 3.5;                                            % frequencia de portadora [
 Am = 25;                                             % Atenuação Maxima [dB]
 SLA = 20;                                            % Limite de nível de lobulo-lateral [dB]
 G_BS = 5;                                            % Ganha da antena BS de pequena celula [dBi]
-P_BS = 24;                                           % Potencia de TX da BS por setor [dBm]
+P_BS = 36;                                           % Potencia de TX da BS por setor [dBm]
 sigma = 4;                                           % desvio padrão do vetor de sombreamento.[dB]
 No = -174;                                           % densidade espectral de potencia [ dBm/Hz ]
 FN = 5;                                              % figura de ruido [5 dB]
@@ -111,6 +111,7 @@ end
 plot(vtUePos,'*b','MarkerSize',12);       % UE = +AZUL
 grid on;
 legend('Celula', 'BS', 'UEs')
+title('Cenário de Multi-células densas')
 % hold off;
 
 
@@ -196,7 +197,7 @@ figure;                                       % gera uma nova figura para plotar
 plot(sort(min(mtDist)), sort(PL))
 xlabel('d (M)')
 ylabel('PL (DB)')
-title('Path Loss ')
+title('Perda de caminho ')
 
 
 %% DADOS COMUNS PARA OS BEAMFORMINGS %%
@@ -219,7 +220,7 @@ Pot = dbm2lin(P_BS);
 
 %%  BEAMFORMING 2D %%
 
-% angulos de BORESIGHT FIXO p/ BS de cada setor, i.e, angulo azimutal na qual teremos o ganho máximo da antena 
+% angulos de STEERING FIXO p/ BS de cada setor, i.e, angulo azimutal na qual teremos o ganho máximo da antena 
 ang_st = [pi/3, pi, 5*pi/3];                        % angulos de boresight p/ cada celula [Radianos]
 vtAngST = repmat(ang_st, 1, M);                     % angulo steering de cada setor [Radianos]
 
@@ -299,7 +300,7 @@ Av_2D = -min(12.*((mtdifAngsVer_2D./theta3dB_2D).^2), SLA);    % [linhas, coluna
 A_2D = -min(-(Ah_2D + Av_2D), Am);
 
 % COEFICIENTES DO CANAL AO QUADRADO EM dB (SEM FAST-FADING)
-H_2d = G_BS + A_2D + mtPL + mtNormal;   % [dB]
+H_2d = G_BS + A_2D - mtPL + mtNormal;   % [dB]
 
 % coeficientes do canal ao quadrado em ESCALA LINEAR (sem fast-fading)
 h_2d = db2lin(H_2d);
@@ -421,7 +422,7 @@ for ii = 1:length(vtTheta3dB_Esp),
     A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);
 
     % coeficientes do canal ao quadrado em dB (sem fast-fading)
-    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) + mtPL + mtNormal;   % [dB]
+    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) - mtPL + mtNormal;   % [dB]
     
 end
 
@@ -610,7 +611,7 @@ for ii = 1:length(vtTheta3dB_Esp),
     A_GR(:,:,ii) = -min(-(Av_gr(:,:,ii) + Ah_gr(:,:,ii)), Am);
     
     % coeficientes do canal ao quadrado em dB (sem fast-fading)
-    H_GR(:,:,ii) = G_BS + A_GR(:,:,ii) + mtPL + mtNormal;   % [dB]
+    H_GR(:,:,ii) = G_BS + A_GR(:,:,ii) - mtPL + mtNormal;   % [dB]
 end
 
 
@@ -641,6 +642,7 @@ end
 % SINR em dB
 YGR_dB = 10*log10(Y_GR);
 cdfplot(YGR_dB(1,:))
-legend('Conventional', 'UE especifica', '16 grupo');
-
-
+legend('2DBF', '3DBF usuário especifico', '3DBF grupo de usuários (16 grupos)');
+xlabel('SINR (dB)')
+ylabel('CDF')
+title('')
