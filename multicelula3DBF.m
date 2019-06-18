@@ -1,4 +1,4 @@
- %% (ARTIGO1) %%
+%% (ARTIGO1) %%
 % 3D Beamforming Capacity Improvement in Macrocell-Assisted Small Cell Architeture
 clear all;
 clc;
@@ -7,21 +7,21 @@ close all;
 
 %% SETUP SIMULATION  
 
-M = 7;                                               % numero de celulas
+M = 7;                                               % numero de celulas (1 anel)
+%M = 19;                                               % numero de celulas (2 anel)
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
 UEcadaSetor = 100;                                    % numero de UE's por (micro)setor
 numUE = UEcadaSetor*S;                               % numero de UE's total
-R = 250;                                              % raio da pequena celula
+R = 250;                                             % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
 yBS = 0;                                             % Posição do eixo y da BS
-% vtSector = [ R*exp( 1j*[0 2*pi/3 4*pi/3] ) ];      % vetor marcação dos pontos de sectorização
 bandWidth = 10e+6;                                   % largura de banda 
 fc = 3.5;                                            % frequencia de portadora [Ghz] na small-cell
 Am = 25;                                             % Atenuação Maxima [dB]
 SLA = 20;                                            % Limite de nível de lobulo-lateral [dB]
 G_BS = 5;                                            % Ganha da antena BS de pequena celula [dBi]
-P_BS = 36;                                           % Potencia de TX da BS por setor [dBm]
+P_BS = 24;                                           % Potencia de TX da BS por setor [dBm]
 sigma = 4;                                           % desvio padrão do vetor de sombreamento.[dB]
 No = -174;                                           % densidade espectral de potencia [ dBm/Hz ]
 FN = 5;                                              % figura de ruido [5 dB]
@@ -32,7 +32,27 @@ H_UE = 1.5;                                          % altura da antena da estaç
 %% GERANDO A POSIÇÃO DA BS DE CADA CÉLULA %%
 
 % VALORES DE TESTE
-vtBS = [0*exp(1j*0), 2*R*exp(1j*0), 2*R*exp(1j*pi/3), 2*R*exp(1j*2*pi/3), 2*R*exp(-j*pi), 2*R*exp(-1j*2*pi/3) 2*R*exp(-1j*pi/3)];
+vtBS = [];
+
+% celula central
+vtBS(1) = 0*exp(1j*0);
+
+% primeiro anel
+vtBS(2:7) = [2*R*exp(1j*0), 2*R*exp(1j*pi/3), 2*R*exp(1j*2*pi/3), 2*R*exp(-1j*pi), 2*R*exp(-1j*2*pi/3), 2*R*exp(-1j*pi/3)];
+
+% segundo anel
+% vtBS(8) = 4*R*exp(1j*0); 
+% vtBS(9) = (real(vtBS(3)) + 2*R) + 1j*imag(vtBS(3));
+% vtBS(10) = 4*R*exp(1j*pi/3);
+% vtBS(11) = 2*sqrt(3)*R*exp(1j*pi/2);
+% vtBS(12) = 4*R*exp(1j*2*pi/3);
+% vtBS(13) = (real(vtBS(4)) - 2*R) + 1j*imag(vtBS(4));
+% vtBS(14) = 4*R*exp(-1j*pi);
+% vtBS(15) = real(vtBS(13)) - 1j*imag(vtBS(13));
+% vtBS(16) = real(vtBS(12)) - 1j*imag(vtBS(12));
+% vtBS(17) = 2*sqrt(3)*R*exp(-1j*pi/2);
+% vtBS(18) = real(vtBS(10)) - 1j*imag((vtBS(10)));
+% vtBS(19) = real(vtBS(9)) - 1j*imag((vtBS(9)));
 
 % sobrepor gráficos
 hold on
@@ -40,28 +60,8 @@ hold on
 % laço percorrendo cada BS p/ plotar suas posições e sua ÁREA DE COBERTURA
 for ii = 1:length(vtBS)
     circle(real(vtBS(ii)),imag(vtBS(ii)),R)
-    plot(real(vtBS(ii)),imag(vtBS(ii)),'xr')
+    plot(real(vtBS(ii)),imag(vtBS(ii)),'*r','MarkerSize',16)
 end
-
-% vtBS = [];                                          % vetor com a posição da BS (estação base) de cada celula
-% raio_bs = 0;                                        % raio das BS's - gerar aleatorio
-% ang_bs = 0;                                         % angulos de posições das BS's - gerar aleatorio
-% vtBS(1) = raio_bs.*exp(1j*ang_bs);                  % primeira BS será na origem do sistema
-% vtBS = [0, 2*R*exp(1j*0)]
-
-% laço que percorre o número de células p/ gerar a posição das BS 
-% for ii = 2:M,
-%     
-%     while true, 
-%         
-%         % calculando a posição da BSii 
-%         vtBS(ii) = (2*R*rand(1,1) - R) + 1j.*(2*R*rand(1,1) - R);
-%         
-%         if ,
-%         end
-%     end
-%     
-% end
 
 vtBsSetor = repelem(vtBS, FatorSetor);             % vetor posição da BS's p/ cada setor 
 
@@ -80,7 +80,8 @@ for ii = 1:numUE,
     while true,
         
         % calculando a posição do UEii 
-        vtUePos(ii) = (6*R*rand - 3*R) + 1j*(6*R*rand - 3*R);
+        vtUePos(ii) = (6*R*rand - 3*R) + 1j*(6*R*rand - 3*R);      % p/ 1 anel
+        % vtUePos(ii) = (10*R*rand - 5*R) + 1j*(10*R*rand - 5*R);   % p/ 2 anéis 
         
         % calculando o indice na qual representa o setor do UEii
          ind = mod(ii, S);
@@ -120,11 +121,18 @@ title('Cenário de Multi-células densas')
 % cada elemento representa o indice do UE no vtUePos q pertence ao Setor da Linha e está ativo no instante de tempo 1.  
 mtUeSector = zeros(S, UEcadaSetor);  % [linhas, colunas] = [setores, SLOT de TEMPO]
 
+% matriz que encontra os indices na borda da celula
+mtBordaCelula = zeros(S, UEcadaSetor); % [linhas, colunas] = [setores, indices dos UE's]
+
+% vetor que contem os indices dos UE's do vtUePos que estão nas bordas 
+vtIndBorda = [];
+vtMediaBorda = [];
+
 % laço percorrendo cada UE 
 for ii = 1:numUE,
     
-    % dif = valor da menor diferença entre o ang. Azimutal do UE e posição da BS's de cada celula
-    % indCel = indice da BS da celula na qual UEii pertence
+    % calcula a celula do usuário ii através da distância dele para cada BS
+    % [dif, indCel] = [diferença do UE_ii p/ BS_setor, indice da celula que UE_ii pertence]
     [dif, indCel] = min(abs(vtUePos(ii) - vtBS)); 
     
     % Encontrando o angulo do UEii em relação a sua BS
@@ -148,8 +156,24 @@ for ii = 1:numUE,
     linha = FatorSetor*(indCel-1) + indSetor;
     coluna = find( mtUeSector(linha, :) == 0, 1, 'first');
     mtUeSector(linha, coluna) = ii;
+    
+    if (abs(z_aux) >= 0.9*R) && (abs(z_aux) <= R),
+        colBorda = find( mtBordaCelula(linha, :) == 0, 1, 'first');
+        mtBordaCelula(linha, colBorda) = ii; 
+    end
+    
+    if (abs(z_aux) >= 0.9*R) && (abs(z_aux) <= R),
+        indice = length(vtIndBorda);
+        vtIndBorda(indice + 1) = ii;
+    else
+        indice = length(vtMediaBorda);
+        vtMediaBorda(indice + 1) = ii;
+    end
 end
 
+
+% find(mtBordaCelula(i,:)); % retorna os elementos não nulos da linha_i
+% plot(vtUePos(mtBordaCelula(ii ,find(mtBordaCelula(ii,:)))),'ro'); % imprimir os valores que estão na borda
 
 % TESTANDO O CODIGO DA MATRIZ 'mtUeSector' 
 %resultado = vtUePos(mtUeSector(1,:));   % captura as distancia dos UE's que estão dentro do setor X
@@ -195,9 +219,10 @@ end
 %[vtDistUEtoBS, POS] = min(mtDist, [], 1);
 figure;                                       % gera uma nova figura para plotar os graficos
 plot(sort(min(mtDist)), sort(PL))
+grid on;
 xlabel('d (M)')
 ylabel('PL (DB)')
-title('Perda de caminho ')
+title('Perda de Percurso ')
 
 
 %% DADOS COMUNS PARA OS BEAMFORMINGS %%
@@ -282,8 +307,6 @@ end
 % CALCULANDO O  PADRÃO DE RADIAÇÃO HORIZONTAL
 Ah_2D = -min(12.*((mtdifAngsHor_2D./fi3dB_2D).^2), Am);
 
-
-
 % MATRIZ de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
 mtdifAngsVer_2D = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
 
@@ -292,9 +315,6 @@ mtdifAngsVer_2D = abs(mtThetaUE - angDownTild_2d);
 
 % CALCULANDO O PADRÃO DE RADIAÇÃO VERTICAL
 Av_2D = -min(12.*((mtdifAngsVer_2D./theta3dB_2D).^2), SLA);    % [linhas, colunas] = [setores, UE's]
-
-
-
 
 % CALCULANDO O PADRÃO DE RADIAÇÃO TOTAL
 A_2D = -min(-(Ah_2D + Av_2D), Am);
@@ -324,7 +344,34 @@ end
 
 % SINR em dB
 Y2D_dB = 10*log10(Y2D);
-    
+
+% EFICIÊNCIA ESPECTRAL DE CADA USUÁRIO
+R_2d = log2(1 + Y2D);
+
+% EFICIÊNCIA ESPECTRAL TOTAL
+RTotal_2D = sum(R_2d, 2);
+
+% EFICIÊNCIA ESPECTRAL MÉDIA
+Rmedia_2D = RTotal_2D/numUE;
+
+% CAPACIDADE DE CADA USUÁRIO
+C_2d = bandWidth.*log2(1 + Y2D);
+
+% CAPACIDADE TOTAL
+CTotal_2D = sum(C_2d, 2);
+
+% CAPACIDADE MÉDIA
+Cmedia_2D = CTotal_2D/numUE;
+
+% CAPACIDADE DOS USUÁRIO NA BORDA
+Cborda_2d = bandWidth.*log2(1 + Y2D(vtIndBorda));
+
+% CAPACIDADE MÉDIA DOS USUÁRIO NA BORDA
+CMediaborda_2d = (sum(Cborda_2d, 2))/(length(vtIndBorda));
+
+% CCmeio_2d = bandWidth.*log2(1 + Y2D(vtMediaBorda));
+% CCMediaMeio_2d = (sum(CCmeio_2d ,2))/(length(vtMediaBorda));
+
 figure;             % gera uma nova figura
 cdfplot(Y2D_dB)     % plota a CDF do SINR p/ 2DBF em dB 
 hold on;
@@ -333,8 +380,10 @@ hold on;
 %% BEAMFORMING UE ESPECIFICO (3DBF UE-SPECIFIC) %%
 
 % valores tirados do artigo
-vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] --> (Fig. 3, p. 4836)
-vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] --> (Fig. 3, p. 4836)
+%vtFi3dB_Esp = [30 20 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] --> (Fig. 3, p. 4836)
+%vtTheta3dB_Esp = [10 10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] --> (Fig. 3, p. 4836)
+vtFi3dB_Esp = [30 30 30 30 30 30 30 30 30];
+vtTheta3dB_Esp = [8  10 12 14 16 18 20 22 24];
 
 % MATRIZ de DIFERENÇA entre o ang. ELEVAÇÃO de cada UE para o ang. de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
 mtDifAngsVer_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
@@ -453,6 +502,41 @@ end
 % SINR em dB
 YESP_dB = 10*log10(Y_ESP);
 
+% EFICIÊNCIA ESPECTRAL DE CADA USUÁRIO
+R_esp = log2(1 + Y_ESP);
+
+% EFICIÊNCIA ESPECTRAL TOTAL
+RTotal_esp = sum(R_esp, 2);
+
+% EFICIÊNCIA ESPECTRAL MÉDIA
+Rmedia_esp = RTotal_esp./numUE;
+
+% CAPACIDADE DE CADA USUÁRIO
+C_esp = bandWidth.*log2(1 + Y_ESP);
+
+% CAPACIDADE TOTAL 
+CTotal_esp = sum(C_esp, 2);
+
+% CAPACIDADE MÉDIA
+CMedia_esp = CTotal_esp./numUE;
+
+% Capacidade dos Usuário NA BORDA
+CBorda_Esp = [];
+for ii = 1:length(vtFi3dB_Esp),
+    CBorda_Esp(ii, 1: length(vtIndBorda)) = bandWidth.*log2(1 + Y_ESP(ii, vtIndBorda));
+end
+
+% CAPACIDADE MÉDIA DOS USUÁRIOS NA BORDA
+CMediaBorda_Esp = (sum(CBorda_Esp, 2))./(length(vtIndBorda));
+
+% CCMeio_esp = [];
+% for ii = 1:length(vtFi3dB_Esp),
+%     CCMeio_esp(ii, 1: length(vtMediaBorda)) = bandWidth.*log2(1 + Y_ESP(ii, vtMediaBorda));
+% end
+% 
+% CCMediaMeio_esp = (sum( CCMeio_esp, 2))./(length(vtMediaBorda));
+
+% Ganho de Porcentagem 
 hold on;
 % figure;
 cdfplot(YESP_dB(1, :))
@@ -466,7 +550,7 @@ cdfplot(YESP_dB(1, :))
 % valores tirados do artigo 
 vtFi3dB_gr = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] ---> (Fig. 3, p. 4836)
 vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] ---> (Fig. 3, p. 4836)
-B = 16;                            % numero de padrões de feixes (ou, GRUPOS) = Bh*Bv
+B = 32;                            % numero de padrões de feixes (ou, GRUPOS) = Bh*Bv
 Bh = 8;                            % numero de feixes HORIZONTAIS p/ cada setor
 Bv = B/Bh;                         % numero de feixes VERTICAIS p/ cada setor
 
@@ -485,10 +569,14 @@ mtAngsFiSt_gr = mtAngsFiSt_gr';
 mtAngsStering = repmat(mtAngsFiSt_gr, M, 1);     % [linha, coluna] = [setor, grupos de angs. de STEERING para o setor (linha)]
 
 % angDownTild_gr = linspace(-90, 90, Bv);
-andDownTild_gr = zeros(1, Bv);
+angDownTild_gr = zeros(1, Bv);
 angTILD_Inicio = 8;
-angTILD_Final = 10;
-angDownTild_gr = [angTILD_Inicio:2:angTILD_Final];
+passo = 2;
+%angTILD_Final = 10;
+%angDownTild_gr = [angTILD_Inicio:2:angTILD_Final];
+for jj = 1:Bv, 
+    angDownTild_gr(jj) = angTILD_Inicio + (jj - 1)*passo;
+end
 
 % matriz de angulos de INCLINAÇÃO p/ uma celula;
 mtAngsTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % [linha, coluna] = [setor, grupos do ang. Inclinação (TILD) por setor] 
@@ -599,7 +687,7 @@ Av_gr = [];  % VERTICAL da antena para cada angulo \theta_3dB
 A_GR = [];   % TOTAL p/ Beamforming GRUPO
 
 % laço percorrendo cada angulo \theta_3dB, \phi_3dB p/ calcular cada dimensão do setor
-for ii = 1:length(vtTheta3dB_Esp),
+for ii = 1:length(vtFi3dB_gr),
 
     % Ah para cada \fi_3dB
     Ah_gr(:,:,ii) = -min(12.*((mtDifAngsHor_gr./vtFi3dB_gr(ii)).^2), Am);
@@ -622,7 +710,7 @@ h_gr = db2lin(H_GR);
 Y_GR = [];   % SINR
 
 % laço percorrendo cada dimensao do tensor p/ calcular cada dimensão do setor
-for jj = 1:length(vtFi3dB_Esp),
+for jj = 1:length(vtFi3dB_gr),
   
     % laço percorrendo cada UE para calcular a SINR
     for ii = 1:numUE,
@@ -646,3 +734,44 @@ legend('2DBF', '3DBF usuário especifico', '3DBF grupo de usuários (16 grupos)');
 xlabel('SINR (dB)')
 ylabel('CDF')
 title('')
+
+%% GRÁFICOS DAS BARRAS %%
+
+% nova figura
+figure;
+
+% vetor de capacidade média por usuário
+vtCapMedia = [Cmedia_2D, CMedia_esp'];
+
+vtPorcentagem =  (100.*(CMedia_esp - Cmedia_2D))./(Cmedia_2D);
+bar(vtCapMedia./1e6) % barra de valores                      
+ylim([0 40])
+set(gca,'xticklabel',{'Convencional','(30, 10)','(20,10)','(10, 10)', '(5,5)'});
+ylabel('Capacidade Média (Mbps)')
+text(1.9, 33, num2str(vtPorcentagem(1)));
+text(2.2, 33, '%');
+text(2.9, 34, num2str(vtPorcentagem(2)));
+text(3.2, 34, '%');
+text(3.9, 35, num2str(vtPorcentagem(3)));
+text(4.2, 35, '%');
+text(4.9, 35.5, num2str(vtPorcentagem(4)));
+text(5.2, 35.5, '%');
+
+% nova figura
+figure;
+
+% vetor de capacidade média por usuário
+vtCapMediaBorda = [CMediaborda_2d CMediaBorda_Esp'];
+vtPorcentagemBorda = (100.*(CMediaBorda_Esp - CMediaborda_2d))./(CMediaborda_2d);
+bar(vtCapMediaBorda./1e6) % barra de valores
+ylim([0 20])
+set(gca,'xticklabel',{'Convencional','(30, 10)','(20,10)','(10, 10)', '(5,5)'});
+ylabel('Capacidade Média p/ Usuários na Borda da Célula (Mbps)')
+text(1.9, 16.8, num2str(vtPorcentagemBorda(1)));
+text(2.2, 16.8, '%');
+text(2.8, 17.8, num2str(vtPorcentagemBorda(2)));
+text(3.1, 17.8, '%');
+text(3.8, 18.6, num2str(vtPorcentagemBorda(3)));
+text(4.1, 18.6, '%');
+text(4.8, 19.3, num2str(vtPorcentagemBorda(4)));
+text(5.2, 19.3, '%');

@@ -36,31 +36,6 @@ ang_bs = 0;                                         % angulos de posições das BS
 posBS = raio_bs.*exp(1j*ang_bs);                    % forma exponencial das BS's
 vtBsSetor = repelem(posBS, FatorSetor);             % vetor posição da BS's p/ cada setor
 
-
-% VALORES DE TESTE P/ numUE = 8;
-% angUE = [0*pi, 5*pi/6, 11*pi/6, pi/3, pi/2, pi, 7*pi/6, 35*pi/18, 14*pi/9 ];  % angulos de teste
-% raioUE = [R/2, R/4, R/8, R/4, R/8, R/2, R/8, R/4, 5*R/6];                    % raios de teste
-% vtUePos = raioUE.*exp(1j*angUE);                                             % vetor de posição das UE's de teste
-
-
-% GERANDO AS POSIÇÕES DO UE's ~ U(10, R)
-% vtUePos = [];   % vetor p/ as posições aleatórios dos UE's 
- 
-% laço percorre o numero de UE's p/ gerar sua posição
-% for ii = 1:numUE,
-%     
-%     while true,
-%         % calculando a posição do UEii 
-%         vtUePos(ii) = (2*R*rand(1,1) - R) + 1j.*(2*R*rand(1,1) - R);
-%          
-%          % se distancia do Ue for menor que o Raios e maior que 10, então:
-%          if (abs(vtUePos(ii)) < R) && (abs(vtUePos(ii)) > 10),
-%              break;
-%          end
-%     end
-% end
-
-
 % GERANDO AS POSIÇÕES DO UE's ~ U(10, R) DE FORMA QUE SEJA UE ATIVO POR SETOR EM CADA SLOT DE TEMPO
 vtUePos = [];   % vetor p/ as posições aleatórios dos UE's 
 
@@ -265,8 +240,8 @@ Y2D_dB = 10*log10(Y2D);
 %% BEAMFORMING UE ESPECIFICO %%
 
 % valores tirados do artigo
-vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
-vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
+vtFi3dB_Esp = [30 20 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtTheta3dB_Esp = [10 10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 
 % matriz de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
 mtDifAngsVer_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
@@ -390,8 +365,8 @@ YESP_dB = 10*log10(Y_ESP);
 %% BEAMFORMING GRUPO-ESPECIFICO
 
 % valores tirados do artigo 
-vtFi3dB_gr = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
-vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
+vtFi3dB_gr = [30 20 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS]
+vtTheta3dB_gr = [10 10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS]
 B = 16;                            % numero de padrões de feixes (ou, GRUPOS)
 Bh = 8;                            % numero de feixes horizontais p/ cada setor
 Bv = B/Bh;                         % numero de feixes vertiais p/ cada setor
@@ -548,8 +523,8 @@ hold on;
 
 % figure;
 cdfplot(YESP_dB(1, :))   % plotar SINR p/ 3DBF UE-Especifico
-%cdfplot(YESP_dB(2, :))
-%cdfplot(YESP_dB(3, :))
+cdfplot(YESP_dB(2, :))
+cdfplot(YESP_dB(3, :))
 %legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
 
 cdfplot(YGR_dB(1,:))     % plotar SINR p/ 3DBF Grupo-UE    
