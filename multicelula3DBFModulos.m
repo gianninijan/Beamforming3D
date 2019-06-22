@@ -502,7 +502,7 @@ cdfplot(YESP_dB(3, :))
 %% FORMATAÇÃO DE FEIXES TRIDIMENSIONAIS (3D) POR GRUPOS DE UE (3DBF UE-GROUP) 
 
 % numero de feixes
-Bh = 64;                            % HORIZONTAIS p/ cada setor
+Bh = 64;                           % HORIZONTAIS p/ cada setor
 Bv = 4;                            % VERTICAIS p/ cada setor
 B = Bh*Bv;                         % TOTAIS (ou, GRUPOS)
 
@@ -616,98 +616,41 @@ Av_gr = [];  % VERTICAL da antena para cada angulo \theta_3dB
 A_GR = [];   % TOTAL p/ Beamforming GRUPO
 
 % vetor de LARGURAS DE FEIXE em 3 dB, na 
-vtFi3dB_gr = [20 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] ---> (Fig. 3, p. 4836)
-vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] ---> (Fig. 3, p. 4836)
+% vtFi3dB_gr = [20 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] ---> (Fig. 3, p. 4836)
+% vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] ---> (Fig. 3, p. 4836)
+fi3dB_3DBFbyGr = 10;     % largura de feixe de 3 dB na horizontal [GRAUS]
+Theta3dB_3DBFbtGr = 10;  % largura de feixe de 3 dB na vertical
 
-% laço percorrendo cada angulo \theta_3dB, \phi_3dB p/ calcular cada dimensão do setor
-for ii = 1:length(vtFi3dB_gr),
-
-    % Ah para cada \fi_3dB
-    Ah_gr(:,:,ii) = -min(12.*((mtDifAngsHor_gr./vtFi3dB_gr(ii)).^2), Am);
+% calculando o PADRÃO de RADIAÇÃO
+Ah_gr = -min(12.*((mtDifAngsHor_gr./fi3dB_3DBFbyGr).^2), Am);       % HORIZONTAL
+Av_gr = -min(12.*((mtdifAngsVer_gr./Theta3dB_3DBFbtGr).^2), SLA);   % VERTICAL
+A_GR = -min(-(Av_gr + Ah_gr), Am);                                  % TOTAL
     
-    % Av para cada \theta_3dB
-    Av_gr(:,:,ii) = -min(12.*((mtdifAngsVer_gr./vtTheta3dB_gr(ii)).^2), SLA);
-    
-    % Padrão de radiação TOTAL
-    A_GR(:,:,ii) = -min(-(Av_gr(:,:,ii) + Ah_gr(:,:,ii)), Am);
-    
-    % coeficientes do canal ao quadrado em dB (sem fast-fading)
-    H_GR(:,:,ii) = G_BS + A_GR(:,:,ii) - mtPL + mtNormal;   % [dB]
-end
+% COEFICIENTES do CANAL ao QUADRADO (SEM FAST-FADING)
+H_GR = G_BS + A_GR - mtPL + mtNormal;   % [dB]
+h_gr = db2lin(H_GR);                    % ESCALA LINEAR
 
-
-% coeficientes do canal ao quadrado em escala linear (sem fast-fading)
-h_gr = db2lin(H_GR);
-
-% SINR para Beamforming GRUPO
+% vetor SINR para Beamforming GRUPO
 Y_GR = [];   % SINR
 
-% laço percorrendo cada dimensao do tensor p/ calcular cada dimensão do setor
-for jj = 1:length(vtFi3dB_gr),
-  
-    % laço percorrendo cada UE para calcular a SINR
-    for ii = 1:numUE,
+% laço percorrendo cada UE para calcular a SINR
+for ii = 1:numUE,
+    
+    [setor, inst] = find(mtUeSector == ii);  % = [nº do setor q UE_ii pertence, INTERVALO de TEMPO que o UE_ii está ativo]
         
-        % 'setor' que o UEjj pertence e o instante 'inst' que o UEjj está ativo
-        [setor, inst] = find(mtUeSector == ii);
+    % soma h_gr interferentes para cada UE 
+    aux = sum(h_gr(:, ii)) - h_gr(setor, ii);
         
-        % soma h_gr interferentes para cada UE 
-        aux = sum(h_gr(:, ii, jj)) - h_gr(setor, ii, jj);
+    % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
+    Y_GR(ii) = (Pot*h_gr(setor, ii))/(Pot*aux + PN);     
         
-        % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
-        Y_GR(jj, ii) = (Pot*h_gr(setor, ii, jj))/(Pot*aux + PN);     % linha: SNIR p/ cada \theta_3dB e \fi_3dB
-        
-    end
 end
 
 % SINR em dB
 YGR_dB = 10.*log10(Y_GR);
 hold on;
-cdfplot(YGR_dB(1,:))
-cdfplot(YGR_dB(2,:))
-cdfplot(YGR_dB(3,:))
+cdfplot(YGR_dB)
 legend('2DBF', '3DBF usuário especifico', '3DBF grupo de usuários (16 grupos)');
 xlabel('SINR (dB)')
 ylabel('CDF')
 title('')
-
-%% PLOTANDO OS GRÁFICOS DA CAPACIDADE P/ OS TIPOS DE FORMATAÇÃO DE FEIXES 
-
-% nova figura
-figure;
-
-% vetor de capacidade média por usuário
-vtCapMedia = [Cmedia_2D, CMedia_esp'];
-
-vtPorcentagem =  (100.*(CMedia_esp - Cmedia_2D))./(Cmedia_2D);
-bar(vtCapMedia./1e6) % barra de valores                      
-ylim([0 40])
-set(gca,'xticklabel',{'Convencional','(30, 10)','(20,10)','(10, 10)', '(5,5)'});
-ylabel('Capacidade Média (Mbps)')
-text(1.9, 33, num2str(vtPorcentagem(1)));
-text(2.2, 33, '%');
-text(2.9, 34, num2str(vtPorcentagem(2)));
-text(3.2, 34, '%');
-text(3.9, 35, num2str(vtPorcentagem(3)));
-text(4.2, 35, '%');
-text(4.9, 35.5, num2str(vtPorcentagem(4)));
-text(5.2, 35.5, '%');
-
-% nova figura
-figure;
-
-% vetor de capacidade média por usuário
-vtCapMediaBorda = [CMediaborda_2d CMediaBorda_Esp'];
-vtPorcentagemBorda = (100.*(CMediaBorda_Esp - CMediaborda_2d))./(CMediaborda_2d);
-bar(vtCapMediaBorda./1e6) % barra de valores
-ylim([0 20])
-set(gca,'xticklabel',{'Convencional','(30, 10)','(20,10)','(10, 10)', '(5,5)'});
-ylabel('Capacidade Média p/ Usuários na Borda da Célula (Mbps)')
-text(1.9, 16.8, num2str(vtPorcentagemBorda(1)));
-text(2.2, 16.8, '%');
-text(2.8, 17.8, num2str(vtPorcentagemBorda(2)));
-text(3.1, 17.8, '%');
-text(3.8, 18.6, num2str(vtPorcentagemBorda(3)));
-text(4.1, 18.6, '%');
-text(4.8, 19.3, num2str(vtPorcentagemBorda(4)));
-text(5.2, 19.3, '%');
