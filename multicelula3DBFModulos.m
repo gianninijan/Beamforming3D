@@ -106,7 +106,7 @@ for ii = 1:numUE,
         
         % se as CONDIÇÕES abaixo em RELAÇÃO a UE_ii e BS_ind forem VERDADEIRAS, então:
         if (distUE < R) && (distUE >= 10) && (anguloUE >= vtAngIncSetor(ind)) && (anguloUE < (vtAngIncSetor(ind) + (360/FatorSetor))),
-            break;      % posição VALIDA  e QUEBRA o LAÇO INFINITO
+            break;      % posição VALIDA p/ UE_ii  e QUEBRA o LAÇO INFINITO
         end
     end
 end
@@ -127,25 +127,26 @@ mtUeSector = zeros(S, UEcadaSetor);  % [linhas, colunas] = [setores, SLOT de TEM
 % matriz que encontra os indices na borda da celula
 mtBordaCelula = zeros(S, UEcadaSetor); % [linhas, colunas] = [setores, indices dos UE's]
 
-% vetor que contem os indices dos UE's do vtUePos que estão nas bordas 
+% vetor com os indices dos UE's do vt 'vtUePos' que estão nas bordas 
 vtIndBorda = [];
-vtMediaBorda = [];
 
 % laço percorrendo cada UE 
 for ii = 1:numUE,
     
     % calcula a celula do usuário ii através da distância dele para cada BS
-    % [dif, indCel] = [diferença do UE_ii p/ BS_setor, indice da celula que UE_ii pertence]
-    [dif, indCel] = min(abs(vtUePos(ii) - vtBS)); 
+    [dif, indCel] = min(abs(vtUePos(ii) - vtBS)); % = [ distancia do UE_ii p/ BS_indCell,  numero da CELULA que UE_ii pertence ]
     
-    % Encontrando o angulo do UEii em relação a sua BS
+    % posição do UE_ii em relação BS_indCel
     pos_x = real(vtUePos(ii)) - real(vtBS(indCel));
     pos_y = imag(vtUePos(ii)) - imag(vtBS(indCel));
     z_aux = pos_x + 1j*pos_y;
-    angUE = wrapTo2Pi(angle(z_aux));                            % angUE ~ [0, 2*pi] radianos
+    
+    % ang. AZIMUTAL de UE_ii em relação a célula_indCel
+    angUE = wrapTo2Pi(angle(z_aux));                            % ~ [0, 2*pi] radianos
     
     % calculando qual setor do UEii em relação a sua BS
-    indSetor = 0;
+    indSetor = 0;           % indice do SETOR na qual UE_ii pertence
+    
     if (angUE >= 0) && (angUE < (2*pi/3)),
         indSetor = 1;
         
@@ -165,13 +166,12 @@ for ii = 1:numUE,
         mtBordaCelula(linha, colBorda) = ii; 
     end
     
+    % se UE_ii satisfazer as condições abaixo, então o mesmo se encontra na BORDA
     if (abs(z_aux) >= 0.9*R) && (abs(z_aux) <= R),
         indice = length(vtIndBorda);
         vtIndBorda(indice + 1) = ii;
-    else
-        indice = length(vtMediaBorda);
-        vtMediaBorda(indice + 1) = ii;
     end
+    
 end
 
 % TESTANDO A MATRIZ 'mtBordaCelula'
@@ -184,7 +184,8 @@ end
  
 hold off
 
-%% CALCULAR A PERDA DE CAMINHO (en: Path Loss) DO UE'S P/ BS'S %%
+
+%% CALCULAR A PERDA DE CAMINHO 
 
 % MATRIZ de DISTÂNCIA de cada UE (coluna) para BS (linha) de cada setor
 mtDist = zeros(S,numUE);                            
@@ -206,23 +207,17 @@ mtPL = PathLoss(mtDist, fc);                                 % [Linha_x, Coluna_
 
 PL = [];
 
-% laço percorrendo cada UE's p/ calcular o PL 
+% laço percorrendo cada UE's p/ calcular o PL do UE_ii em relação a sua BS_setor 
 for ii = 1:numUE,
-    
-    % 'setor' é o nº do setor que UE_ii pertence; 
-    % 'inst' é o INTERVALO de TEMPO que o UE_ii está ATIVO
-    [setor, inst] = find(mtUeSector == ii);
+  
+    [setor, inst] = find(mtUeSector == ii); % = [ nº do setor que UE_ii pertence ,  INTERVALO de TEMPO que o UE_ii está ATIVO]
     
     % Perda de caminho p UE_ii
     PL(ii) = mtPL(setor, ii);
 
 end
 
-% PL = min(mtPL);                                % valor minimo
-% vtDistUEtoBS = min(mtDist);
-
-%[vtDistUEtoBS, POS] = min(mtDist, [], 1);
-figure;                                       % gera uma nova figura para plotar os graficos
+figure;                                      
 plot(sort(min(mtDist)), sort(PL))
 grid on;
 xlabel('d (M)')
@@ -232,62 +227,56 @@ title('Perda de Percurso ')
 
 %% DADOS COMUNS PARA OS BEAMFORMINGS %%
 
+% matriz de SHADOWING normal em dB
+mtNormal = sigma.*randn(S,numUE);               % [LINHA_X, COLUNA_Y] = [SETOR_X, UE_Y]
+
+% matriz com os ANGs. de ELEVAÇÃO [em, GRAUS (º)]  de cada UE p/ BSs de cada setor 
+mtThetaUE = atand((H_BS - H_UE)./(mtDist));     % [LINHA_X, COLUNA_Y] = [SETOR_X, UE_Y]
+
+% POTÊNCIA do RUÍDO em
+PN = dbm2lin(No+ 10*log10(bandWidth)+FN);       % escala LINEAR 
+
+% POTÊNCIA da ANTENA TRANSMISSORA em
+Pot = dbm2lin(P_BS);                            % escala LINEAR      
+
 % vetor de DESVANECIMENTO RÁPIDO para cada UE's
 % mtFastFad_2D = (1/sqrt(2))*[randn(S, numUE) + 1j*randn(S, numUE)];
 
-% matriz de SHADOWING normal em dB
-mtNormal = sigma.*randn(S,numUE);    % [Linhas, Colunas] = [Setores, UE's]
 
-% matriz de Angulos de ELEVAÇÃO [em, GRAUS (º)]  de cada UE p/ cada BS do setor 
-mtThetaUE = atand((H_BS - H_UE)./(mtDist));   % [LINHA, COLUNA] = [SETOR, UE]
+%%  FORMATAÇÃO BIDIMENSIONAL (2D) DE FEIXES   %%
 
-% Potência do Ruído Linear
-PN = dbm2lin(No+ 10*log10(bandWidth)+FN);  
+% angs de DIREÇÃO FIXO p/ BS de cada setor (i.e, angulo AZIMUTAL de ganho máximo da antena) 
+ang_st = [pi/3, pi, 5*pi/3];                        % angulos de direção p/ cada CELULA [em, Radianos]
+vtAngST = repmat(ang_st, 1, M);                     % angulo direção p/ cada SETOR [em, Radianos]
 
-% Potência da antena transmissora
-Pot = dbm2lin(P_BS);                       
+% MATRIZ de diferença entre o ang. AZIMUAL de cada UE p/ o ang. de DIREÇÃO da BS de cada setor (em, GRAUS º)
+mtdifAngsHor_2D = zeros(S, numUE);      % [linha_X, coluna_Y] = [setor_X, UE_Y]
 
-
-%%  BEAMFORMING 2D %%
-
-% angulos de STEERING FIXO p/ BS de cada setor, i.e, angulo azimutal na qual teremos o ganho máximo da antena 
-ang_st = [pi/3, pi, 5*pi/3];                        % angulos de boresight p/ cada celula [Radianos]
-vtAngST = repmat(ang_st, 1, M);                     % angulo steering de cada setor [Radianos]
-
-% valores tirados do artigo
-fi3dB_2D = 70;                     % largura de feixe de 3 dB na horizontal [GRAUS] -> Pág. 4837, Simulation Setup
-theta3dB_2D = 10;                  % largura de feixe de 3 dB na vertical   [GRAUS] -> Pág. 4837, Simulation Setup
-angDownTild_2d = 8;                % angulo de down-tild (FIXO) [GRAUS] -> Pág. 4836, Simulation Setup
-
-% MATRIZ de diferença entre o angulo AZIMUAL de cada UE's para o angulo de BORESIGHT da BS de cada setor (em, GRAUS º)
-mtdifAngsHor_2D = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
-
-% laço percorrendo cada UE's p/ calcular os valores da matriz 'mtdifAngsHor_2D'
+% laço percorrendo cada UE p/ calcular os valores da matriz 'mtdifAngsHor_2D'
 for ii = 1:numUE,
     
-    % 'setor' é o nº do setor que UEii pertence; 'inst' é o SLOT de TEMPO que o UEjj está ativo
-    [setor, inst] = find(mtUeSector == ii);
+    [setor, inst] = find(mtUeSector == ii); % = [ nº do setor que UE_ii pertence ,  INTERVALO de TEMPO que o UE_ii está ATIVO]
     
     % posição do UEii em relação a BS_setor
     pos_x = real(vtUePos(ii)) - real(vtBsSetor(setor));
     pos_y = imag(vtUePos(ii)) - imag(vtBsSetor(setor));
     z_aux = pos_x + 1j*pos_y;  
     
-    % angulo AZIMUTAL do UEii em relação a posição da BS_setor, em
+    % ang. AZIMUTAL do UEii em relação a posição da BS_setor, em
     anguloUE180 = (180/pi)*angle(z_aux);         % ~ [-180º, +180º]
     anguloUE360 = wrapTo360(anguloUE180);        % ~ [0º, 360º]
     
-    % angulo de STEERING da BS do 'setor'
+    % ang. de DIREÇÃO da BS_setor
     angStrTo360 = (180/pi)*vtAngST(setor);       % ~ [0º, 360º]
     angStrTo180 = wrapTo180(angStrTo360);        % ~ [-180º, +180º]
     
-    % calculando a diferença entre o ang. de AZIMUTAL da UEii com o angulo de STEERING da BS_setor
+    % calculando a diferença entre o ang. de AZIMUTAL da UEii com o ang. de DIREÇÃO da BS_setor
     mtdifAngsHor_2D(setor, ii) = min(abs(anguloUE360 - angStrTo360), abs(anguloUE180 - angStrTo180));
     
     % laço percorrendo cada SETOR
     for s = 1:S,
         
-        % se o setor 's' é diferente do 'setor' UEii (laço externo), então
+        % se o SETOR_s é diferente do SETOR_setor na qual UEii pertence (laço externo), então
         if s ~= setor,
             
             % Posição do UEii em relação a BS,s 
@@ -295,11 +284,11 @@ for ii = 1:numUE,
             pos_yRel = imag(vtUePos(ii)) - imag(vtBsSetor(s));
             zRel = pos_xRel + 1j*pos_yRel;
             
-            % angulo AZIMUTAL de UEii em relação a posição da BS,s
+            % angulo AZIMUTAL de UE_ii em relação a posição da BS_s
             anguloRelUE180 = (180/pi)*angle(zRel);             % ~ [-180º, +180º]
             anguloRelUE360 = wrapTo360(anguloRelUE180);        % ~ [0º, 360º]
     
-            % angulo de STEERING da BS do setor_s
+            % angulo de DIREÇÃO da BS do setor_s
             angStr360 = (180/pi)*vtAngST(s);                   % ~ [0º, 360º]
             angStr180 = wrapTo180(angStr360);                  % ~ [-180º, +180º]
             
@@ -309,95 +298,110 @@ for ii = 1:numUE,
     end
 end
 
-% CALCULANDO O  PADRÃO DE RADIAÇÃO HORIZONTAL
-Ah_2D = -min(12.*((mtdifAngsHor_2D./fi3dB_2D).^2), Am);
-
 % MATRIZ de diferença entre o angulo ELEVAÇÃO de cada UEs para o angulo de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
 mtdifAngsVer_2D = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
+
+% ang. INCLINAÇÃO FIXO p/ BS de cada setor, em
+angDownTild_2d = 8;                % [GRAUS, º] -> Pág. 4836, Simulation Setup
 
 % calculando os valores da matriz 'mtdifAngsVer_2D'
 mtdifAngsVer_2D = abs(mtThetaUE - angDownTild_2d);
 
-% CALCULANDO O PADRÃO DE RADIAÇÃO VERTICAL
-Av_2D = -min(12.*((mtdifAngsVer_2D./theta3dB_2D).^2), SLA);    % [linhas, colunas] = [setores, UE's]
+% LARGURAS DE FEIXE em 3 dB, na
+fi3dB_2D = 70;                     % HORIZONTAL [GRAUS] -> Pág. 4837, Simulation Setup
+theta3dB_2D = 10;                  % VERTICAL   [GRAUS] -> Pág. 4837, Simulation Setup
 
-% CALCULANDO O PADRÃO DE RADIAÇÃO TOTAL
-A_2D = -min(-(Ah_2D + Av_2D), Am);
+% caluclando o padrão de RADIAÇÃO 
+Ah_2D = -min(12.*((mtdifAngsHor_2D./fi3dB_2D).^2), Am);      % HORIZONTAL
+Av_2D = -min(12.*((mtdifAngsVer_2D./theta3dB_2D).^2), SLA);  % VERTICAL   
+A_2D = -min(-(Ah_2D + Av_2D), Am);                           % TOTAL
 
-% COEFICIENTES DO CANAL AO QUADRADO EM dB (SEM FAST-FADING)
+% COEFICIENTES DO CANAL AO QUADRADO (SEM FAST-FADING), em
 H_2d = G_BS + A_2D - mtPL + mtNormal;   % [dB]
+h_2d = db2lin(H_2d);                    % ESCALA LINEAR
 
-% coeficientes do canal ao quadrado em ESCALA LINEAR (sem fast-fading)
-h_2d = db2lin(H_2d);
-
-% SINR
-Y2D = [];   % SINR
+% vetor de SINR p/ 2DBF
+Y2D = [];   
 
 % laço percorrendo cada UE para calcular a SINR
 for ii = 1:numUE,
     
-    % 'setor' que o UEjj pertence e o SLOT DE TEMPO 'inst' que o UEii está ativo
-    [setor, inst] = find(mtUeSector == ii);
+    [setor, inst] = find(mtUeSector == ii);  % = [ nº do setor que UE_ii pertence ,  INTERVALO de TEMPO que o UE_ii está ATIVO]
     
-    % calcula os coeficientes de canais INTERFERENTES p/ UEii
+    % calcula os coeficientes de canais INTERFERENTES p/ UE_ii
     aux = sum(h_2d(:, ii)) - h_2d(setor, ii);
     
-    % calculo da SNIR
+    % calculo da SNIR do UE_ii
     Y2D(ii) = (Pot*h_2d(setor, ii))/(Pot*aux + PN);
     
 end
 
-% SINR em dB
+% SINR em dB p/ 2DBF
 Y2D_dB = 10*log10(Y2D);
 
-% EFICIÊNCIA ESPECTRAL DE CADA USUÁRIO
-R_2d = log2(1 + Y2D);
+% EFICIÊNCIA ESPECTRAL 
+R_2d = log2(1 + Y2D);        % de cada UE
+RTotal_2D = sum(R_2d, 2);    % TOTAL 
+Rmedia_2D = RTotal_2D/numUE; % MÉDIA
 
-% EFICIÊNCIA ESPECTRAL TOTAL
-RTotal_2D = sum(R_2d, 2);
+% CAPACIDADE
+C_2d = bandWidth.*log2(1 + Y2D);                            % de cada UE 
+CTotal_2D = sum(C_2d, 2);                                   % TOTAL
+Cmedia_2D = CTotal_2D/numUE;                                % MÉDIA
+Cborda_2d = bandWidth.*log2(1 + Y2D(vtIndBorda));           % de cada UE na BORDA
+CMediaborda_2d = (sum(Cborda_2d, 2))/(length(vtIndBorda));  % média dos UE's na Borda
 
-% EFICIÊNCIA ESPECTRAL MÉDIA
-Rmedia_2D = RTotal_2D/numUE;
-
-% CAPACIDADE DE CADA USUÁRIO
-C_2d = bandWidth.*log2(1 + Y2D);
-
-% CAPACIDADE TOTAL
-CTotal_2D = sum(C_2d, 2);
-
-% CAPACIDADE MÉDIA
-Cmedia_2D = CTotal_2D/numUE;
-
-% CAPACIDADE DOS USUÁRIO NA BORDA
-Cborda_2d = bandWidth.*log2(1 + Y2D(vtIndBorda));
-
-% CAPACIDADE MÉDIA DOS USUÁRIO NA BORDA
-CMediaborda_2d = (sum(Cborda_2d, 2))/(length(vtIndBorda));
-
-% CCmeio_2d = bandWidth.*log2(1 + Y2D(vtMediaBorda));
-% CCMediaMeio_2d = (sum(CCmeio_2d ,2))/(length(vtMediaBorda));
-
-figure;             % gera uma nova figura
+figure;             % gera uma nova figura 
 cdfplot(Y2D_dB)     % plota a CDF do SINR p/ 2DBF em dB 
 hold on;
 
 
-%% BEAMFORMING UE ESPECIFICO (3DBF UE-SPECIFIC) %%
+%% FORMATAÇÃO DE FEIXES TRIDIMENSIONAIS (3D) POR USUÁRIOS (3DBF UE-SPECIFIC) 
 
-% valores tirados do artigo
-vtFi3dB_Esp = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] --> (Fig. 3, p. 4836)
-vtTheta3dB_Esp = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] --> (Fig. 3, p. 4836)
-%vtFi3dB_Esp = [30 30 30 30 30 30 30 30 30];
-%vtTheta3dB_Esp = [8  10 12 14 16 18 20 22 24];
+% MATRIZ de DIFERENÇA entre o ang. AZIMUTAL de cada UEs para o ang. de DIREÇÃO da BS de cada setor (em, GRAUS º)
+mtDifAngHor_Esp = zeros(S, numUE);  % [linha_X, coluna_Y] = [setor_X, UE_Y]
 
-% MATRIZ de DIFERENÇA entre o ang. ELEVAÇÃO de cada UE para o ang. de INCLINAÇÃO (TILD) da BS de cada setor (em, GRAUS º)
-mtDifAngsVer_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
+% laço percorrendo cada UE's p/ calcular os valores da matriz 'mtDifAngHor_Esp'
+for jj = 1:numUE,
+    
+    [setor, inst] = find(mtUeSector == jj); % = [ nº do setor que UE_jj pertence, INTERVALO DE TEMPO que o UE_jj está ativo]
+     
+    % laço percorrendo cada SETOR
+    for s = 1:S,
+        
+        % se o SETOR_s é diferente do SETOR_setor na qual UEjj pertence (laço externo), então
+        if s ~= setor,
+            
+            % Posição do UEjj em relação a BS_s 
+            pos_xRel = real(vtUePos(jj)) - real(vtBsSetor(s));
+            pos_yRel = imag(vtUePos(jj)) - imag(vtBsSetor(s));
+            zRel = pos_xRel + 1j*pos_yRel;
+            
+            % angulo AZIMUTAL de UE_jj em relação a posição da BS_s, em
+            anguloRelUE180 = (180/pi)*angle(zRel);             % ~ [-180º, +180º]
+            anguloRelUE360 = wrapTo360(anguloRelUE180);        % ~ [0º, 360º]
+            
+            % Posição do UE_ATIVO no setor_s no instante 'inst'
+            xBS_rel = real(vtUePos(mtUeSector(s, inst))) - real(vtBsSetor(s));
+            yBS_rel = imag(vtUePos(mtUeSector(s, inst))) - imag(vtBsSetor(s));
+            zBS_rel = xBS_rel + 1j*yBS_rel;
+            
+            % angulo de STEERING da BS (= ang. AZIMUTAL do UE ATIVO) do setor_s no SLOT DE TEMPO 'inst'
+            angsStrBS180 = (180/pi).*angle(zBS_rel);       % [-180º, +180º]
+            angsStrBS360 = wrapTo360(angsStrBS180);        % [0º, 360º]
+            
+            % calculando a diferença entre o ang. de AZIMUTAL da UEjj com o ang. de STEERING da BS_s  
+            mtDifAngHor_Esp(s, jj) = min(abs(anguloRelUE360 - angsStrBS360), abs(anguloRelUE180 - angsStrBS180));    
+        end 
+    end 
+end
+% matriz de DIFERENÇA entre o ang. ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada setor (em, GRAUS º)
+mtDifAngsVer_Esp = zeros(S, numUE);  % [linha_X, coluna_Y] = [setor_X, UE_Y]
 
 % laço percorrendo cada UE's p/ calcular os valores da matriz 'mtDifAngsVer_Esp'
 for jj = 1:numUE,
     
-    % 'setor' é o nº do setor que UEjj pertence; 'inst' é o SLOT de TEMPO que o UEjj está ativo
-    [setor, inst] = find(mtUeSector == jj);  
+    [setor, inst] = find(mtUeSector == jj);  % [ nº do setor que UEjj pertence , INTERVALO de TEMPO que o UEjj está ativo ]
         
     % laço percorrendo cada SETOR
     for s = 1:S,
@@ -417,74 +421,36 @@ for jj = 1:numUE,
     end
 end    
 
+% vetor de LARGURAS DE FEIXE em 3 dB, na
+vtFi3dB_Esp = [20 10 5];                  % HORIZONTAL [GRAUS] --> (Fig. 3, p. 4836)
+vtTheta3dB_Esp = [10 10 5];               % VERTICAL   [GRAUS] --> (Fig. 3, p. 4836)
 
-% MATRIZ de DIFERENÇA entre o angulo AZIMUTAL de cada UEs para o angulo de STEERING da BS de cada setor (em, GRAUS º)
-mtDifAngHor_Esp = zeros(S, numUE);  % [linha, coluna] = [setor, UE]
+% TENSORES para calcular o padrão RADIAÇÃO
+Av_Esp = []; % VERTICAL  p/ cada ang. theta_3dB
+Ah_Esp = []; % HORIZONTAL p/ cada ang. \phi_3dB
+A_ESP = [];  % TOTAL  
 
-% laço percorrendo cada UE's p/ calcular os valores da matriz 'mtDifAngHor_Esp'
-for jj = 1:numUE,
-    
-    % 'setor' é o nº do setor que UEjj pertence; 'inst' é o SLOT DE TEMPO que o UEjj está ativo
-    [setor, inst] = find(mtUeSector == jj);
-     
-    % laço percorrendo cada SETOR
-    for s = 1:S,
-        
-        % se o setor 's' é diferente do setor UEjj (laço externo), então
-        if s ~= setor,
-            
-            % Posição do UEjj em relação a BS_s 
-            pos_xRel = real(vtUePos(jj)) - real(vtBsSetor(s));
-            pos_yRel = imag(vtUePos(jj)) - imag(vtBsSetor(s));
-            zRel = pos_xRel + 1j*pos_yRel;
-            
-            % angulo AZIMUTAL de UEjj em relação a posição da BS_s, em
-            anguloRelUE180 = (180/pi)*angle(zRel);             % ~ [-180º, +180º]
-            anguloRelUE360 = wrapTo360(anguloRelUE180);        % ~ [0º, 360º]
-            
-            % Posição do UE_ATIVO no setor_s no instante 'inst'
-            xBS_rel = real(vtUePos(mtUeSector(s, inst))) - real(vtBsSetor(s));
-            yBS_rel = imag(vtUePos(mtUeSector(s, inst))) - imag(vtBsSetor(s));
-            zBS_rel = xBS_rel + 1j*yBS_rel;
-            
-            % angulo de STEERING da BS (= ang. AZIMUTAL do UE ATIVO) do setor_s no SLOT DE TEMPO 'inst'
-            angsStrBS180 = (180/pi).*angle(zBS_rel);       % [-180º, +180º]
-            angsStrBS360 = wrapTo360(angsStrBS180);        % [0º, 360º]
-            
-            % calculando a diferença entre o ang. de AZIMUTAL da UEjj com o ang. de STEERING da BS_s  
-            mtDifAngHor_Esp(s, jj) = min(abs(anguloRelUE360 - angsStrBS360), abs(anguloRelUE180 - angsStrBS180));    
-        end 
-    end 
-end
+% COEFICIENTE do CANAL ao quadrado em dB (sem fast-fading)
+H_ESP = [];  
 
-% TENSORES para calcular o
-Av_Esp = []; % padrão RADIAÇÃO VERTICAL da antena para cada ANGULO \theta_3dB
-Ah_Esp = []; % padrão RADIAÇÃO HORIZONTAL da antena para cada angulo \phi_3dB
-A_ESP = [];  % padrão RADIAÇÃO TOTAL p/ Beamforming ESPECIFICO   
-H_ESP = [];  % COEFICIENTE do CANAL ao quadrado em dB (sem fast-fading)
-
-% laço percorrendo cada angulo \theta_3dB, \phi_3dB
+% % laço percorrendo a tupla de angs (\theta_3dB, \phi_3dB)
 for ii = 1:length(vtTheta3dB_Esp),
     
-    % padrão de radiação VERTICAL
-    Av_Esp(:,:,ii) = -min(12.*((mtDifAngsVer_Esp./vtTheta3dB_Esp(ii)).^2), SLA);  
-    
-    % padrão de radiação HORIZONTAL
-    Ah_Esp(:,:,ii) = -min(12.*((mtDifAngHor_Esp./vtFi3dB_Esp(ii)).^2), Am);
-    
-    % Padrão de RADIAÇÃO TOTAL
-    A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);
+    % PADRÃO de RADIAÇÃO na
+    Av_Esp(:,:,ii) = -min(12.*((mtDifAngsVer_Esp./vtTheta3dB_Esp(ii)).^2), SLA);  % VERTICAL
+    Ah_Esp(:,:,ii) = -min(12.*((mtDifAngHor_Esp./vtFi3dB_Esp(ii)).^2), Am);       % HORIZONTAL
+    A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);                 % TOTAL
 
-    % coeficientes do canal ao quadrado em dB (sem fast-fading)
-    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) - mtPL + mtNormal;   % [dB]
-    
+    % COEFICIENTES do CANAL ao quadrado em dB (sem fast-fading) em dB
+    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) - mtPL + mtNormal;   % [linha_X, coluna_Y] = [Setor_X, UE_Y]
 end
 
-% coeficientes do canal ao quadrado em escala linear (sem fast-fading)
-h_esp = db2lin(H_ESP);
 
-% SINR para BEAMFORMING ESPECIFICO
-Y_ESP = [];   % SINR
+% COEFICIENTES do CANAL ao QUADRADO (sem fast-fading) em escala LINEAR
+h_esp = db2lin(H_ESP);             % [linha_X, coluna_Y] = [Setor_X, UE_Y]
+
+% SINR para 3DBF POR UE
+Y_ESP = [];  
 
 % laço percorrendo as dimensões do tensor h_esp
 for jj = 1:length(vtFi3dB_Esp),
@@ -495,7 +461,7 @@ for jj = 1:length(vtFi3dB_Esp),
         % 'setor' que o UEjj pertence e o instante 'inst' que o UEjj está ativo
         [setor, inst] = find(mtUeSector == ii);      
         
-        % soma o h_esp interferentes de cada UE
+        % soma o h_esp interferentes do UE_ii
         aux = sum(h_esp(:, ii, jj)) - h_esp(setor, ii, jj);
         
         % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
@@ -504,26 +470,18 @@ for jj = 1:length(vtFi3dB_Esp),
     end
 end
 
-% SINR em dB
+% SINR p/ 3DBF por UE, em dB
 YESP_dB = 10*log10(Y_ESP);
 
-% EFICIÊNCIA ESPECTRAL DE CADA USUÁRIO
-R_esp = log2(1 + Y_ESP);
-
-% EFICIÊNCIA ESPECTRAL TOTAL
-RTotal_esp = sum(R_esp, 2);
-
-% EFICIÊNCIA ESPECTRAL MÉDIA
-Rmedia_esp = RTotal_esp./numUE;
+% EFICIÊNCIA ESPECTRAL 
+R_esp = log2(1 + Y_ESP);            % DE CADA UE
+RTotal_esp = sum(R_esp, 2);         % TOTAL
+Rmedia_esp = RTotal_esp./numUE;     % MÉDIA
 
 % CAPACIDADE DE CADA USUÁRIO
-C_esp = bandWidth.*log2(1 + Y_ESP);
-
-% CAPACIDADE TOTAL 
-CTotal_esp = sum(C_esp, 2);
-
-% CAPACIDADE MÉDIA
-CMedia_esp = CTotal_esp./numUE;
+C_esp = bandWidth.*log2(1 + Y_ESP); % DE CADA UE 
+CTotal_esp = sum(C_esp, 2);         % TOTAL 
+CMedia_esp = CTotal_esp./numUE;     % MÉDIA
 
 % Capacidade dos Usuário NA BORDA
 CBorda_Esp = [];
@@ -534,74 +492,37 @@ end
 % CAPACIDADE MÉDIA DOS USUÁRIOS NA BORDA
 CMediaBorda_Esp = (sum(CBorda_Esp, 2))./(length(vtIndBorda));
 
-% CCMeio_esp = [];
-% for ii = 1:length(vtFi3dB_Esp),
-%     CCMeio_esp(ii, 1: length(vtMediaBorda)) = bandWidth.*log2(1 + Y_ESP(ii, vtMediaBorda));
-% end
-% 
-% CCMediaMeio_esp = (sum( CCMeio_esp, 2))./(length(vtMediaBorda));
-
-% Ganho de Porcentagem 
-hold on;
-% figure;
+% PLOTANDO A CDF DA SINR_dB
+hold on
 cdfplot(YESP_dB(1, :))
 cdfplot(YESP_dB(2, :))
 cdfplot(YESP_dB(3, :))
 
-%legend('Conventional', 'UE especifica - (\theta_{3dB}, \phi_{3dB) = (70º, 10º)}');
 
+%% FORMATAÇÃO DE FEIXES TRIDIMENSIONAIS (3D) POR GRUPOS DE UE (3DBF UE-GROUP) 
 
-%% BEAMFORMING GRUPO-ESPECIFICO (3DBF UE-GROUP) %%
+% numero de feixes
+Bh = 64;                            % HORIZONTAIS p/ cada setor
+Bv = 4;                            % VERTICAIS p/ cada setor
+B = Bh*Bv;                         % TOTAIS (ou, GRUPOS)
 
-% valores tirados do artigo 
-vtFi3dB_gr = [30 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] ---> (Fig. 3, p. 4836)
-vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] ---> (Fig. 3, p. 4836)
-B = 32;                            % numero de padrões de feixes (ou, GRUPOS) = Bh*Bv
-Bh = 8;                            % numero de feixes HORIZONTAIS p/ cada setor
-Bv = B/Bh;                         % numero de feixes VERTICAIS p/ cada setor
+% matriz com o grupo de ang. de DIREÇÃO p/ cada SETOR
+mtAngsStering = geradorAngsDIRECAO(Bh, M, FatorSetor);  % [linha_X, coluna_Y] = [setor_X, ang_Direcao_Y do setor_X]
 
-% mtDirFeixes = zeros(Bh, Bv);     % matriz de direção de feixes, onde cada elemento: (Fi_st, Theta_tild)
-% mtDirFeixes = cell(Bh, Bv);      % celula de direção de feixes
-
-% Calculando os angulos de STEERING p/ cada setor
-angHorInic = 0;   
-angHorFinal = 360;
-passo = (angHorFinal - angHorInic)/(Bh*FatorSetor);
-angsFiSt_gr = linspace(angHorInic + (passo/2), angHorFinal - (passo/2), Bh*FatorSetor);
-
-% calculando a matriz de angulos de STEERING p/ cada célula
-mtAngsFiSt_gr = reshape(angsFiSt_gr, Bh, FatorSetor);    
-mtAngsFiSt_gr = mtAngsFiSt_gr';                          
-mtAngsStering = repmat(mtAngsFiSt_gr, M, 1);     % [linha, coluna] = [setor, grupos de angs. de STEERING para o setor (linha)]
-
-% angDownTild_gr = linspace(-90, 90, Bv);
-angDownTild_gr = zeros(1, Bv);
-angTILD_Inicio = 8;
-passo = 2;
-%angTILD_Final = 10;
-%angDownTild_gr = [angTILD_Inicio:2:angTILD_Final];
-for jj = 1:Bv, 
-    angDownTild_gr(jj) = angTILD_Inicio + (jj - 1)*passo;
-end
-
-% matriz de angulos de INCLINAÇÃO p/ uma celula;
-mtAngsTild_gr = repmat(angDownTild_gr, FatorSetor*M, 1); % [linha, coluna] = [setor, grupos do ang. Inclinação (TILD) por setor] 
-
-% matriz DIFERENÇA do ang. AZIMUTAL de cada UE para o ang. STEERING da BS de cada setor
-mtDifAngsHor_gr = zeros(S, numUE);  % [linha, coluna] = [Setor, UE] 
+% matriz DIFERENÇA do ang. AZIMUTAL de cada UE para o ang. DIREÇÃO da BS de cada SETOR [em, GRAUS (º)]
+mtDifAngsHor_gr = zeros(S, numUE);  % [linha_X, coluna_Y] = [setor_X, UE_Y] 
 
 % laço percorrendo todos UE's p/ calcular os valores da matriz 'mtdifAngsHor_gr'
 for jj = 1:numUE,
     
-    % 'setor' que o UEjj pertence e o slot_de_tempo 'inst' que o UEjj está ativo 
-    [setor, inst] = find(mtUeSector == jj);    
+    [setor, inst] = find(mtUeSector == jj); % = [ setor que UE_jj pertence, instante de tempo ]   
     
-    % posição do UEjj em relação a BS_setor na qual ele pertence
+    % posição do UE_jj em relação a BS_setor na qual ele pertence
     pos_x = real(vtUePos(jj)) - real(vtBsSetor(setor));
     pos_y = imag(vtUePos(jj)) - imag(vtBsSetor(setor));
     z_aux = pos_x + 1j*pos_y;
     
-    % angulo AZIMUTAL do UEjj em relação a posição da BS_setor na qual ele pertence, em
+    % ang. AZIMUTAL do UE_jj em relação a posição da BS_setor na qual ele pertence, em
     anguloUE180 = (180/pi).*angle(z_aux);  % ~ [-180º, +180º]
     anguloUE360 = wrapTo360(anguloUE180);  % ~ [0º, +360º]
    
@@ -650,6 +571,8 @@ for jj = 1:numUE,
     end
 end
 
+% matriz de angulos de INCLINAÇÃO p/ cada SETOR;
+mtAngsTild_gr = geradorAngsINCLINACAO(Bv, S, 0, max(max(mtThetaUE)));       % [linha_X, coluna_Y] = [setor_X, ang_Inclinacao_Y do setor_X]
 
 % diferença do ang de ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada setor (em, GRAUS º)
 mtdifAngsVer_gr = zeros(S, numUE);
@@ -691,6 +614,10 @@ end
 Ah_gr = [];  % HORIZONTAL da antena para cada angulo \phi_3dB 
 Av_gr = [];  % VERTICAL da antena para cada angulo \theta_3dB
 A_GR = [];   % TOTAL p/ Beamforming GRUPO
+
+% vetor de LARGURAS DE FEIXE em 3 dB, na 
+vtFi3dB_gr = [20 10 5];            % largura de feixe de 3 dB na horizontal [GRAUS] ---> (Fig. 3, p. 4836)
+vtTheta3dB_gr = [10 10 5];         % largura de feixe de 3 dB na vertical   [GRAUS] ---> (Fig. 3, p. 4836)
 
 % laço percorrendo cada angulo \theta_3dB, \phi_3dB p/ calcular cada dimensão do setor
 for ii = 1:length(vtFi3dB_gr),
@@ -734,14 +661,17 @@ for jj = 1:length(vtFi3dB_gr),
 end
 
 % SINR em dB
-YGR_dB = 10*log10(Y_GR);
+YGR_dB = 10.*log10(Y_GR);
+hold on;
 cdfplot(YGR_dB(1,:))
+cdfplot(YGR_dB(2,:))
+cdfplot(YGR_dB(3,:))
 legend('2DBF', '3DBF usuário especifico', '3DBF grupo de usuários (16 grupos)');
 xlabel('SINR (dB)')
 ylabel('CDF')
 title('')
 
-%% GRÁFICOS DAS BARRAS %%
+%% PLOTANDO OS GRÁFICOS DA CAPACIDADE P/ OS TIPOS DE FORMATAÇÃO DE FEIXES 
 
 % nova figura
 figure;

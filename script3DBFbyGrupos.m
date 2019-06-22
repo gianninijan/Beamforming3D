@@ -657,9 +657,15 @@ for jj = 1:particoes,
 end
 
 % SINR em dB
-YGR_dB = 10*log10(Y_GR);
+YGR_dB = 10.*log10(Y_GR);
 cdfplot(YGR_dB(1,:))
-legend('2DBF', '3DBF usuário especifico', '3DBF grupo de usuários (16 grupos)');
+cdfplot(YGR_dB(2,:))
+cdfplot(YGR_dB(3,:))
+cdfplot(YGR_dB(4,:))
+cdfplot(YGR_dB(5,:))
+cdfplot(YGR_dB(6,:))
+cdfplot(YGR_dB(7,:))
+legend('2DBF', '3DBF usuário', '3DBF 16 grupo', '3DBF 32 grupo', '3DBF 64 grupo', '3DBF 128 grupo', '3DBF 256 grupo');
 xlabel('SINR (dB)')
 ylabel('CDF')
 title('')
