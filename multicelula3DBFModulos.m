@@ -9,7 +9,7 @@ M = 7;                                              % numero de celulas (1 anel)
 %M = 19;                                              % numero de celulas(2 anel)
 FatorSetor = 3;                                      % Fator de setorização, i.e, setores/celulas
 S = M*FatorSetor;                                    % número de setores. S = {1, 2, 3, ..., }      
-UEcadaSetor = 2;                                   % numero de UE's por (micro)setor
+UEcadaSetor = 100;                                   % numero de UE's por (micro)setor
 numUE = UEcadaSetor*S;                               % numero de UE's total
 R = 250;                                             % raio da pequena celula
 xBS = 0;                                             % Posição do eixo x da BS
@@ -499,49 +499,18 @@ mtDifAngsHor_gr = calculadorDifAngsHor( S, numUE, vtUePos, vtBsSetor, mtUeSector
 % matriz de angulos de INCLINAÇÃO p/ cada SETOR;
 mtAngsTild_gr = geradorAngsINCLINACAO(Bv, S, 0, max(max(mtThetaUE)));       % [linha_X, coluna_Y] = [setor_X, ang_Inclinacao_Y do setor_X]
 
-% diferença do ang de ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada setor (em, GRAUS º)
-mtdifAngsVer_gr = zeros(S, numUE);
-
-% laço percorrendo todos UE's p/ calcular os valores da matriz 'mtdifAngsVer_gr'
-for jj= 1:numUE,
-    
-    % 'setor' é o nº do setor que o UEjj pertence; 'inst' é o slot_de_tempo na qual UEjj está ativo
-    [setor, inst] = find(mtUeSector == jj);       
-    
-    % angulo de ELEVAÇÃO do UEjj em relação BS_setor, na qual ele pertence
-    angElevUE = mtThetaUE(setor, jj); % em, graus (º)
-    
-    % calculando a DIFERENÇA entre o ang. de ELEVAÇÃO do UEjj e o Angs de INCLINÃO (TILD) disponíveis p/ BS_setor na qual ele pertence 
-    mtdifAngsVer_gr(setor, jj) = min(abs(angElevUE - mtAngsTild_gr(setor,:)));
-    
-    % laço percorrendo todos os  SETORES
-    for s = 1:S,
-        
-        % se o setor 's' é diferente do 'setor' que contém o UEjj (laço externo), então
-        if s ~= setor,
-            
-            % ang. de ELEVAÇÃO do UEjj em RELAÇÃO a BS_s
-            angElevUeRel = mtThetaUE(s,jj);
-            
-            % ang. de ELEVAÇÂO do UE_ATIVO no setor 's' no slot_de_tempo 'inst'
-            angElevUeAtivo = mtThetaUE(s, mtUeSector(s, inst));
-            
-            % encontrando o ang. de ELEVAÇÃO (TILD) da BS_s dentro do GRUPO de angs. de INCLINAÇÃO dísponiveis para o setor_s
-            [diferenca, indice] = min(abs(angElevUeAtivo - mtAngsTild_gr(s,:)));
-            
-            % calculando a diferença entre o ang. ELEVAÇÃO do UEjj (em relação a BS_s) e o ang. de INCLINAÇÃO da BS_s, em
-            mtdifAngsVer_gr(s, jj) = min(abs(angElevUeRel - mtAngsTild_gr(s, indice)));    
-        end
-    end    
-end
+% matriz DIFERENÇA do ang de ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada SETOR (em, GRAUS º)
+% mtdifAngsVer_gr = zeros(S, numUE);
+mtdifAngsVer_gr = calculadorDifAngsVert( S, numUE, mtThetaUE, mtUeSector, mtAngsTild_gr);
 
 % TENSORES para calcular o padrão de RADIAÇÃO 
 Ah_gr = [];  % HORIZONTAL da antena para cada angulo \phi_3dB 
 Av_gr = [];  % VERTICAL da antena para cada angulo \theta_3dB
 A_GR = [];   % TOTAL p/ Beamforming GRUPO
 
-fi3dB_3DBFbyGr = 10;     % largura de feixe de 3 dB na horizontal [GRAUS]
-Theta3dB_3DBFbtGr = 10;  % largura de feixe de 3 dB na vertical
+% LARGURA DE FEIXES DE 3 dB, na
+fi3dB_3DBFbyGr = 10;     % HORIZONTAL [GRAUS]
+Theta3dB_3DBFbtGr = 10;  % VERTICAL [GRAUS]
 
 % calculando o PADRÃO de RADIAÇÃO
 Ah_gr = -min(12.*((mtDifAngsHor_gr./fi3dB_3DBFbyGr).^2), Am);       % HORIZONTAL
