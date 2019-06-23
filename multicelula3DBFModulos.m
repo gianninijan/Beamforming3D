@@ -395,6 +395,8 @@ for jj = 1:numUE,
         end 
     end 
 end
+
+
 % matriz de DIFERENÇA entre o ang. ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada setor (em, GRAUS º)
 mtDifAngsVer_Esp = zeros(S, numUE);  % [linha_X, coluna_Y] = [setor_X, UE_Y]
 
@@ -419,59 +421,49 @@ for jj = 1:numUE,
             mtDifAngsVer_Esp(s, jj) = abs(angElevRelUE_Esp - angVertUeAtivo); 
         end
     end
-end    
-
-% vetor de LARGURAS DE FEIXE em 3 dB, na
-vtFi3dB_Esp = [20 10 5];                  % HORIZONTAL [GRAUS] --> (Fig. 3, p. 4836)
-vtTheta3dB_Esp = [10 10 5];               % VERTICAL   [GRAUS] --> (Fig. 3, p. 4836)
+end
 
 % TENSORES para calcular o padrão RADIAÇÃO
 Av_Esp = []; % VERTICAL  p/ cada ang. theta_3dB
 Ah_Esp = []; % HORIZONTAL p/ cada ang. \phi_3dB
 A_ESP = [];  % TOTAL  
 
-% COEFICIENTE do CANAL ao quadrado em dB (sem fast-fading)
-H_ESP = [];  
+% vetor de LARGURAS DE FEIXE em 3 dB, na
+% vtFi3dB_Esp = [20 10 5];                  % HORIZONTAL [GRAUS] --> (Fig. 3, p. 4836)
+% vtTheta3dB_Esp = [10 10 5];               % VERTICAL   [GRAUS] --> (Fig. 3, p. 4836)
 
-% % laço percorrendo a tupla de angs (\theta_3dB, \phi_3dB)
-for ii = 1:length(vtTheta3dB_Esp),
-    
-    % PADRÃO de RADIAÇÃO na
-    Av_Esp(:,:,ii) = -min(12.*((mtDifAngsVer_Esp./vtTheta3dB_Esp(ii)).^2), SLA);  % VERTICAL
-    Ah_Esp(:,:,ii) = -min(12.*((mtDifAngHor_Esp./vtFi3dB_Esp(ii)).^2), Am);       % HORIZONTAL
-    A_ESP(:,:,ii) = -min(-(Ah_Esp(:,:,ii) + Av_Esp(:,:,ii)), Am);                 % TOTAL
+% LARGURAS DE FEIXE em 3 dB, na
+fi3dB_3DBFbyUE = 10;                 % HORIZONTAL [GRAUS]
+theta3dB_3DBFbyUE = 10;              % VERTICAL   [GRAUS]
 
-    % COEFICIENTES do CANAL ao quadrado em dB (sem fast-fading) em dB
-    H_ESP(:,:,ii) = G_BS + A_ESP(:,:,ii) - mtPL + mtNormal;   % [linha_X, coluna_Y] = [Setor_X, UE_Y]
-end
+% calculando o PADRÃO de RADIAÇÃO
+Ah_Esp = -min(12.*((mtDifAngHor_Esp./fi3dB_3DBFbyUE).^2), Am);       % VERTICAL
+Av_Esp = -min(12.*((mtDifAngsVer_Esp./theta3dB_3DBFbyUE).^2), SLA);  % HORIZONTAL
+A_Esp = -min(-(Ah_Esp + Av_Esp), Am);                                % TOTAL 
 
+% COEFICIENTE do CANAL ao QUADRADO (sem fast-fading) em,
+H_ESP = G_BS + A_Esp - mtPL + mtNormal;   % dB
+h_esp = db2lin(H_ESP);    % ESCALA LINEAR, onde: [linha_X, coluna_Y] = [Setor_X, UE_Y]
 
-% COEFICIENTES do CANAL ao QUADRADO (sem fast-fading) em escala LINEAR
-h_esp = db2lin(H_ESP);             % [linha_X, coluna_Y] = [Setor_X, UE_Y]
-
-% SINR para 3DBF POR UE
+% vetr SINR para 3DBF POR UE
 Y_ESP = [];  
 
-% laço percorrendo as dimensões do tensor h_esp
-for jj = 1:length(vtFi3dB_Esp),
+% laço percorrendo cada UE para calcular a SINR
+for ii = 1:numUE,
     
-    % laço percorrendo cada UE para calcular a SINR
-    for ii = 1:numUE,
+    % 'setor' é o setor que UE_ii pertence e o instante 'inst' que o UEjj está ativo
+    [setor, inst] = find(mtUeSector == ii);      
         
-        % 'setor' que o UEjj pertence e o instante 'inst' que o UEjj está ativo
-        [setor, inst] = find(mtUeSector == ii);      
+    % soma o h_esp interferentes do UE_ii
+    aux = sum(h_esp(:, ii)) - h_esp(setor, ii);
         
-        % soma o h_esp interferentes do UE_ii
-        aux = sum(h_esp(:, ii, jj)) - h_esp(setor, ii, jj);
-        
-        % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
-        Y_ESP(jj, ii) = (Pot*h_esp(setor, ii, jj))/(Pot*aux + PN);
+    % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
+    Y_ESP(ii) = (Pot*h_esp(setor, ii))/(Pot*aux + PN);
     
-    end
 end
 
 % SINR p/ 3DBF por UE, em dB
-YESP_dB = 10*log10(Y_ESP);
+YESP_dB = 10.*log10(Y_ESP);
 
 % EFICIÊNCIA ESPECTRAL 
 R_esp = log2(1 + Y_ESP);            % DE CADA UE
@@ -479,24 +471,15 @@ RTotal_esp = sum(R_esp, 2);         % TOTAL
 Rmedia_esp = RTotal_esp./numUE;     % MÉDIA
 
 % CAPACIDADE DE CADA USUÁRIO
-C_esp = bandWidth.*log2(1 + Y_ESP); % DE CADA UE 
-CTotal_esp = sum(C_esp, 2);         % TOTAL 
-CMedia_esp = CTotal_esp./numUE;     % MÉDIA
-
-% Capacidade dos Usuário NA BORDA
-CBorda_Esp = [];
-for ii = 1:length(vtFi3dB_Esp),
-    CBorda_Esp(ii, 1: length(vtIndBorda)) = bandWidth.*log2(1 + Y_ESP(ii, vtIndBorda));
-end
-
-% CAPACIDADE MÉDIA DOS USUÁRIOS NA BORDA
-CMediaBorda_Esp = (sum(CBorda_Esp, 2))./(length(vtIndBorda));
+C_esp = bandWidth.*log2(1 + Y_ESP);                                   % DE CADA UE 
+CTotal_esp = sum(C_esp, 2);                                           % TOTAL 
+CMedia_esp = CTotal_esp./numUE;                                       % MÉDIA
+CBorda_Esp = bandWidth.*log2(1 + Y_ESP(vtIndBorda));                  % NA BORDA
+CMediaBorda_Esp = (sum(CBorda_Esp, 2))./(length(vtIndBorda));         % MÉDIA DOS USUÁRIOS NA BORDA
 
 % PLOTANDO A CDF DA SINR_dB
 hold on
-cdfplot(YESP_dB(1, :))
-cdfplot(YESP_dB(2, :))
-cdfplot(YESP_dB(3, :))
+cdfplot(YESP_dB)
 
 
 %% FORMATAÇÃO DE FEIXES TRIDIMENSIONAIS (3D) POR GRUPOS DE UE (3DBF UE-GROUP) 
