@@ -485,63 +485,82 @@ cdfplot(YESP_dB)
 %% FORMATAÇÃO DE FEIXES TRIDIMENSIONAIS (3D) POR GRUPOS DE UE (3DBF UE-GROUP) 
 
 % numero de feixes
-Bh = 64;                           % HORIZONTAIS p/ cada setor
-Bv = 4;                            % VERTICAIS p/ cada setor
-B = Bh*Bv;                         % TOTAIS (ou, GRUPOS)
+Bh = 8;                           % HORIZONTAIS p/ cada setor
+Bv = 2;                           % VERTICAIS p/ cada setor
+B = Bh*Bv;                        % TOTAIS (ou, GRUPOS)
 
-% matriz com o grupo de ang. de DIREÇÃO p/ cada SETOR
-mtAngsStering = geradorAngsDIRECAO(Bh, M, FatorSetor);  % [linha_X, coluna_Y] = [setor_X, ang_Direcao_Y do setor_X]
+% vetor de PARTIÇÕES
+vtBh = [8, 16, 16, 32, 32, 64, 128];  %16, 16, 32, 64, 64];    % HORIZONTAIS
+vtBv = [2, 2, 4, 4, 8, 8, 8];     %4, 4, 4, 8];       % VERTICAIS
+vtB = vtBh.*vtBv;       % TOTAL (ou, GRUPOS)
 
-% matriz DIFERENÇA do ang. AZIMUTAL de cada UE para o ang. DIREÇÃO da BS de cada SETOR [em, GRAUS (º)]
-%mtDifAngsHor_gr = zeros(S, numUE);  % [linha_X, coluna_Y] = [setor_X, UE_Y] 
-mtDifAngsHor_gr = calculadorDifAngsHor( S, numUE, vtUePos, vtBsSetor, mtUeSector, mtAngsStering );
+% Tensor para os coeficientes de canal para cada par de Grupos
+h_gr = [];
 
-% matriz de angulos de INCLINAÇÃO p/ cada SETOR;
-mtAngsTild_gr = geradorAngsINCLINACAO(Bv, S, 0, max(max(mtThetaUE)));       % [linha_X, coluna_Y] = [setor_X, ang_Inclinacao_Y do setor_X]
-
-% matriz DIFERENÇA do ang de ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada SETOR (em, GRAUS º)
-% mtdifAngsVer_gr = zeros(S, numUE);
-mtdifAngsVer_gr = calculadorDifAngsVert( S, numUE, mtThetaUE, mtUeSector, mtAngsTild_gr);
-
-% TENSORES para calcular o padrão de RADIAÇÃO 
-Ah_gr = [];  % HORIZONTAL da antena para cada angulo \phi_3dB 
-Av_gr = [];  % VERTICAL da antena para cada angulo \theta_3dB
-A_GR = [];   % TOTAL p/ Beamforming GRUPO
-
-% LARGURA DE FEIXES DE 3 dB, na
-fi3dB_3DBFbyGr = 10;     % HORIZONTAL [GRAUS]
-Theta3dB_3DBFbtGr = 10;  % VERTICAL [GRAUS]
-
-% calculando o PADRÃO de RADIAÇÃO
-Ah_gr = -min(12.*((mtDifAngsHor_gr./fi3dB_3DBFbyGr).^2), Am);       % HORIZONTAL
-Av_gr = -min(12.*((mtdifAngsVer_gr./Theta3dB_3DBFbtGr).^2), SLA);   % VERTICAL
-A_GR = -min(-(Av_gr + Ah_gr), Am);                                  % TOTAL
+% laço percorrendo cada grupo
+for jj = 1:length(vtB), 
     
-% COEFICIENTES do CANAL ao QUADRADO (SEM FAST-FADING)
-H_GR = G_BS + A_GR - mtPL + mtNormal;   % [dB]
-h_gr = db2lin(H_GR);                    % ESCALA LINEAR
+    % matriz com o grupo de ang. de DIREÇÃO p/ cada SETOR
+    mtAngsStering = geradorAngsDIRECAO(vtBh(jj), M, FatorSetor);  % [linha_X, coluna_Y] = [setor_X, ang_Direcao_Y do setor_X]
+    
+    % matriz DIFERENÇA do ang. AZIMUTAL de cada UE para o ang. DIREÇÃO da BS de cada SETOR [em, GRAUS (º)]
+    mtDifAngsHor_gr = calculadorDifAngsHor( S, numUE, vtUePos, vtBsSetor, mtUeSector, mtAngsStering ); % [linha_X, coluna_Y] = [setor_X, UE_Y]
+
+    % matriz de angulos de INCLINAÇÃO p/ cada SETOR;
+    mtAngsTild_gr = geradorAngsINCLINACAO(vtBv(jj), S, 0, max(max(mtThetaUE)));       % [linha_X, coluna_Y] = [setor_X, ang_Inclinacao_Y do setor_X]
+
+    % matriz DIFERENÇA do ang de ELEVAÇÃO de cada UE p/ o ang. de INCLINAÇÃO da BS de cada SETOR (em, GRAUS º)
+    mtdifAngsVer_gr = calculadorDifAngsVert( S, numUE, mtThetaUE, mtUeSector, mtAngsTild_gr);
+    
+    % LARGURA DE FEIXES DE 3 dB, na
+    fi3dB_3DBFbyGr = 10;     % HORIZONTAL [GRAUS]
+    Theta3dB_3DBFbtGr = 10;  % VERTICAL [GRAUS]
+    
+    % calculando o PADRÃO de RADIAÇÃO
+    Ah_gr = -min(12.*((mtDifAngsHor_gr./fi3dB_3DBFbyGr).^2), Am);       % HORIZONTAL
+    Av_gr = -min(12.*((mtdifAngsVer_gr./Theta3dB_3DBFbtGr).^2), SLA);   % VERTICAL
+    A_GR = -min(-(Av_gr + Ah_gr), Am);                                  % TOTAL
+    
+    % COEFICIENTES do CANAL ao QUADRADO (SEM FAST-FADING)
+    H_GR = G_BS + A_GR - mtPL + mtNormal;   % [dB]
+    h_gr(:,:,jj) = db2lin(H_GR);                    % ESCALA LINEAR
+end
 
 % vetor SINR para Beamforming GRUPO
 Y_GR = [];   % SINR
 
-% laço percorrendo cada UE para calcular a SINR
-for ii = 1:numUE,
+% laço percorrendo cada par (Bh, Bv)
+for grupo = 1:length(vtB), 
     
-    [setor, inst] = find(mtUeSector == ii);  % = [nº do setor q UE_ii pertence, INTERVALO de TEMPO que o UE_ii está ativo]
-        
-    % soma h_gr interferentes para cada UE 
-    aux = sum(h_gr(:, ii)) - h_gr(setor, ii);
-        
-    % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
-    Y_GR(ii) = (Pot*h_gr(setor, ii))/(Pot*aux + PN);     
-        
+    % laço percorrendo cada UE para calcular a SINR
+    for ii = 1:numUE,
+
+        [setor, inst] = find(mtUeSector == ii);  % = [nº do setor q UE_ii pertence, INTERVALO de TEMPO que o UE_ii está ativo]
+
+        % soma h_gr interferentes para cada UE 
+        aux = sum(h_gr(:, ii, grupo)) - h_gr(setor, ii, grupo);
+
+        % calculo da SNIR, onde cada linha será Y_ESP p/ Fi3dB e theta3dB
+        Y_GR(grupo, ii) = (Pot*h_gr(setor, ii, grupo))/(Pot*aux + PN);     
+
+    end
 end
 
 % SINR em dB
 YGR_dB = 10.*log10(Y_GR);
 hold on;
-cdfplot(YGR_dB)
-legend('2DBF', '3DBF usuário especifico', '3DBF grupo de usuários (16 grupos)');
+cdfplot(YGR_dB(1,:))
+cdfplot(YGR_dB(2,:))
+cdfplot(YGR_dB(3,:))
+cdfplot(YGR_dB(4,:))
+cdfplot(YGR_dB(5,:))
+cdfplot(YGR_dB(6,:))
+cdfplot(YGR_dB(7,:))
+legend('FFC', 'FFU', 'FFG - 16 Grupos', 'FFG - 32 Grupos', 'FFG - 64 Grupos', 'FFG - 128 Grupos')
 xlabel('SINR (dB)')
 ylabel('CDF')
 title('')
+hold off;
+
+%% GRÁFICOS DA CAPACIDADE
+
